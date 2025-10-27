@@ -21,6 +21,8 @@ __inline__ uint32 to_page_va(struct PageInfoElement *ptrPageInfo)
 	return dynAllocStart + (idxInPageInfoArr << PGSHIFT);
 }
 
+
+
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
@@ -45,12 +47,12 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	dynAllocStart = daStart; dynAllocEnd = daEnd;
 	uint32 TotalPages = (daEnd - daStart) / PAGE_SIZE;
 	
-	for (int i = 0; i < LOG2_MAX_SIZE - LOG2_MIN_SIZE; i++) {
+	for (int i = 0; i <= LOG2_MAX_SIZE - LOG2_MIN_SIZE; i++) {
 		LIST_INIT(&freeBlockLists[i]);
 	}
 
 	LIST_INIT(&freePagesList);
-	for (int i = 0; i < TotalPages; i++) {
+	for (int i = get_index(dynAllocStart); i < get_index(dynAllocEnd); i++) {
 		pageBlockInfoArr[i].block_size = 0;
 		pageBlockInfoArr[i].num_of_free_blocks = 0;
 		LIST_INSERT_TAIL(&freePagesList, &pageBlockInfoArr[i]);
@@ -59,6 +61,12 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	//Comment the following line
 	// panic("initialize_dynamic_allocator() Not implemented yet");
 
+}
+
+int get_index(void* va) {
+	int index = ROUNDDOWN(va, PAGE_SIZE) - dynAllocStart;
+	index = index >> PGSHIFT;
+	return index;
 }
 
 //===========================
@@ -75,28 +83,69 @@ __inline__ uint32 get_block_size(void *va)
 //===========================
 // 3) ALLOCATE BLOCK:
 //===========================
-void *alloc_block(uint32 size)
+
+int log2(int number) {
+    if (number <= 1) return 0;
+    uint32 a = 0;
+    number--;
+    while (number > 0) {
+        number >>= 1;
+        a++;
+    }
+    return a;
+}
+
+void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 {
 	{
 		assert(size <= DYN_ALLOC_MAX_BLOCK_SIZE);
 	}
-	uint32 n = 3;
-	uint32 block = 8;
-	while (block < size) {
-		block = block << 1;
-		n++;
-	}
+
+	if (!size) return NULL;
 	
-	uint32 index = n - LOG2_MIN_SIZE;
-	for (int i = index; i < LOG2_MAX_SIZE - LOG2_MIN_SIZE; i++) {
-		if (!LIST_EMPTY(&freeBlockLists[i])) {
-			struct BlockElement* b = LIST_FIRST(&freeBlockLists[i]);
-			LIST_REMOVE(&freeBlockLists[i], b);
-			return b;
-		}
+	int index = log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE)) - LOG2_MIN_SIZE;
+	int blockSize = 1 << log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE));
+	
+	if (!LIST_EMPTY(&freeBlockLists[index])) {
+		struct BlockElement* ptrBlock = LIST_FIRST(&freeBlockLists[index]);
+		LIST_REMOVE(&freeBlockLists[index], ptrBlock);
+
+		int tmp = get_index(ptrBlock);
+		pageBlockInfoArr[tmp].num_of_free_blocks--;
+		return ptrBlock;
 	}
-	panic("alloc_block() out of memory");
-	//TODO: [PROJECT'25.BONUS#1] DYNAMIC ALLOCATOR - block if no free block
+	else if (!LIST_EMPTY(&freePagesList)) {
+		struct PageInfoElement* ptrPage = LIST_FIRST(&freePagesList);
+		LIST_REMOVE(&freePagesList, ptrPage);
+
+		get_page(to_page_va(ptrPage));
+
+		ptrPage->block_size = blockSize;
+		ptrPage->num_of_free_blocks =(PAGE_SIZE / blockSize) - 1;
+		
+		uint32 pageAddress = to_page_va(ptrPage);
+		for (int i = 1; i < (PAGE_SIZE / blockSize); i++) {
+			struct BlockElement* ptrBlock =  
+				(struct BlockElement*)(pageAddress + (i* blockSize));
+			LIST_INSERT_TAIL(&freeBlockLists[index], ptrBlock);
+		}
+
+		return pageAddress;
+	}
+
+
+	while (LIST_EMPTY(&freeBlockLists[index]) && index <= (LOG2_MAX_SIZE - LOG2_MIN_SIZE)) {
+		index++;
+	}
+	if (index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE))
+		panic("No Free Blocks!");
+
+	struct BlockElement* ptrBlock = LIST_FIRST(&freeBlockLists[index]);
+	LIST_REMOVE(&freeBlockLists[index], ptrBlock);
+
+	int tmp = get_index(ptrBlock);
+	pageBlockInfoArr[tmp].num_of_free_blocks--;
+	return ptrBlock;
 }
 
 //===========================

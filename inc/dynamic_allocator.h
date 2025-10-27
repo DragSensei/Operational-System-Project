@@ -18,6 +18,7 @@ struct BlockElement
 	LIST_ENTRY(BlockElement) prev_next_info;	/* linked list links */
 };
 LIST_HEAD(BlockElement_List, BlockElement);
+int get_index(void* va);
 struct BlockElement_List freeBlockLists[LOG2_MAX_SIZE - LOG2_MIN_SIZE + 1] ;
 
 struct PageInfoElement

@@ -1,9 +1,2 @@
-# Ignore everything
-/*
-
-# But don't ignore these specific items
-!/.gitignore
-!/lib/
-!/GNUmakefile
-!/mergedep.pl
 obj/
+.vscode/
