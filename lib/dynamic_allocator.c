@@ -76,8 +76,12 @@ __inline__ uint32 get_block_size(void *va)
 {
 	//TODO: [PROJECT'25.GM#1] DYNAMIC ALLOCATOR - #2 get_block_size
 	//Your code is here
+	struct PageInfoElement ptrPageInfo = pageBlockInfoArr[get_index((uint32)va)];
+
+
+	return ptrPageInfo.block_size;
 	//Comment the following line
-	panic("get_block_size() Not implemented yet");
+	//panic("get_block_size() Not implemented yet");
 }
 
 //===========================
@@ -164,8 +168,31 @@ void free_block(void *va)
 
 	//TODO: [PROJECT'25.GM#1] DYNAMIC ALLOCATOR - #4 free_block
 	//Your code is here
+	int page_index = get_index(va);
+	struct PageInfoElement* page_info = &pageBlockInfoArr[page_index];
+	uint32 block_size = page_info->block_size;
+
+	int list_index = log2(block_size) - LOG2_MIN_SIZE;
+    
+	struct BlockElement* block_to_free = (struct BlockElement*)va;
+	LIST_INSERT_TAIL(&freeBlockLists[list_index], block_to_free);
+	page_info->num_of_free_blocks++;
+
+	uint32 total_blocks_on_page = PAGE_SIZE / block_size;
+	if (page_info->num_of_free_blocks == total_blocks_on_page){
+		uint32 page_va = to_page_va(page_info);
+        for (int i = 0; i < total_blocks_on_page; i++){
+			struct BlockElement* block_to_remove = (struct BlockElement*)(page_va + (i*block_size));
+			LIST_REMOVE(&freeBlockLists[list_index], block_to_remove);	
+		}
+		return_page(page_va);
+		LIST_INSERT_TAIL(&freePagesList, page_info);
+		page_info->block_size = 0;
+		page_info->num_of_free_blocks = 0;
+	}
+
 	//Comment the following line
-	panic("free_block() Not implemented yet");
+	//panic("free_block() Not implemented yet");
 }
 
 //==================================================================================//
