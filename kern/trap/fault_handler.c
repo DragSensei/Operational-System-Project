@@ -96,6 +96,7 @@ void fault_handler(struct Trapframe *tf)
 	//If same fault va for 3 times, then panic
 	//UPDATE: 3 FAULTS MUST come from the same environment (or the kernel)
 	struct Env* cur_env = get_cpu_proc();
+	cprintf("%d", cur_env);
 	if (last_fault_va == fault_va && last_faulted_env == cur_env)
 	{
 		num_repeated_fault++ ;
@@ -128,10 +129,10 @@ void fault_handler(struct Trapframe *tf)
 			panic("User Kernel Stack: overflow exception!");
 		else if (fault_va >= (uint32)c->stack && fault_va < (uint32)c->stack + PAGE_SIZE)
 			panic("Sched Kernel Stack of CPU #%d: overflow exception!", c - CPUS);
-#if USE_KHEAP
-		if (fault_va >= KERNEL_HEAP_MAX)
-			panic("Kernel: heap overflow exception!");
-#endif
+		#if USE_KHEAP
+				if (fault_va >= KERNEL_HEAP_MAX)
+					panic("Kernel: heap overflow exception!");
+		#endif
 	}
 	//2017: Check stack underflow for User
 	else
@@ -159,14 +160,38 @@ void fault_handler(struct Trapframe *tf)
 	}
 	else
 	{
-		if (userTrap)
+		if (userTrap) // Youssef 3ebed 7ob el alb.
 		{
-			/*============================================================================================*/
-			//TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #2 Check for invalid pointers
-			//(e.g. pointing to unmarked user heap page, kernel or wrong access rights),
-			//your code is here
+		    // (1) Pointing to UNMARKED page in user heap (i.e., PERM_UHPAGE = 0)
+		    // (2) Pointing to KERNEL
+		    // (3) Exists with READ-ONLY permissions while writing
+		    // If any invalid case occurs: exit process using env_exit()
+		    int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
 
-			/*============================================================================================*/
+		    // 1. Pointing outside user heap range
+		    if (fault_va < USER_HEAP_START || fault_va >= USER_HEAP_MAX)
+		    {
+		        env_exit();
+		    }
+
+			
+		    // 2. Pointing to UNMARKED page in user heap (PERM_UHPAGE not set)
+		    if ((perms & PERM_PRESENT) && ((perms & PERM_UHPAGE) == 0))
+		    {
+		        env_exit();
+		    }
+
+		    // 3. Pointing to kernel memory
+		    if (fault_va >= KERNEL_BASE)
+		    {
+		        env_exit();
+		    }
+
+		    // 4. Writing to a read-only page
+		    if ((tf->tf_err & FEC_WR) && ((perms & PERM_WRITEABLE) == 0))
+		    {
+		        env_exit();
+		    }
 		}
 
 		/*2022: Check if fault due to Access Rights */

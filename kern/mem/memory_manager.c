@@ -177,7 +177,7 @@ int allocate_frame(struct FrameInfo **ptr_frame_info)
 	 ***********************************************************/
 
 	initialize_frame_info(*ptr_frame_info);
-
+	(*ptr_frame_info)->va = 0;
 	if (!lock_already_held)
 	{
 		release_kspinlock(&MemFrameLists.mfllock);
@@ -356,6 +356,7 @@ void __static_cpt(uint32 *ptr_directory, const uint32 virtual_address, uint32 **
 int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint32 virtual_address, int perm)
 {
 	// Fill this function in
+	ptr_frame_info->va = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	uint32 physical_address = to_physical_address(ptr_frame_info);
 	uint32 *ptr_page_table;
 	if( get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) == TABLE_NOT_EXIST)
@@ -479,18 +480,19 @@ void unmap_frame(uint32 *ptr_page_directory, uint32 virtual_address)
 	if( ptr_frame_info != 0 )
 	{
 		if (ptr_frame_info->isBuffered && !CHECK_IF_KERNEL_ADDRESS((uint32)virtual_address))
-			cprintf("WARNING: Freeing BUFFERED frame at va %x!!!\n", virtual_address) ;
+		cprintf("WARNING: Freeing BUFFERED frame at va %x!!!\n", virtual_address) ;
 		decrement_references(ptr_frame_info);
-
+		
 		/*********************************************************************************/
 		/*NEW'23 el7:)
-		 * unmap_frame(): KEEP THE VALUES OF THE AVAILABLE BITS*/
-		uint32 pte_available_bits = ptr_page_table[PTX(virtual_address)] & PERM_AVAILABLE;
-		ptr_page_table[PTX(virtual_address)] = pte_available_bits;
-		/*********************************************************************************/
-
-		tlb_invalidate(ptr_page_directory, (void *)virtual_address);
-	}
+		* unmap_frame(): KEEP THE VALUES OF THE AVAILABLE BITS*/
+	uint32 pte_available_bits = ptr_page_table[PTX(virtual_address)] & PERM_AVAILABLE;
+	ptr_page_table[PTX(virtual_address)] = pte_available_bits;
+	/*********************************************************************************/
+	
+	tlb_invalidate(ptr_page_directory, (void *)virtual_address);
+}
+    ptr_frame_info->va = 0;
 }
 
 
@@ -598,6 +600,3 @@ struct freeFramesCounters calculate_available_frames()
 }
 
 ///============================================================================================
-
-
-

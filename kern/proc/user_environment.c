@@ -908,16 +908,29 @@ uint32 __cur_k_stk = KERNEL_HEAP_START;
 //===========================================================
 // 6) ALLOCATE SPACE FOR USER KERNEL STACK (One Per Process):
 //===========================================================
-void* create_user_kern_stack(uint32* ptr_user_page_directory)
+void* create_user_kern_stack(uint32* ptr_user_page_directory) //youssef
 {
-	//TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #1 create_user_kern_stack
-	//Your code is here
-	//Comment the following line
-	panic("create_user_kern_stack() is not implemented yet...!!");
+ 	 uint32* stack_base = kmalloc(KERNEL_STACK_SIZE);
+ 	 if (stack_base == NULL)
+ 	 	 panic("Kernel heap out of memory while creating user kernel stack");
 
-	//allocate space for the user kernel stack.
-	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
-	//return a pointer to the start of the allocated space (including the GUARD PAGE)
+ 	 uint32 guard_page_va = (uint32) stack_base;
+
+
+ 	 // FIX: Declare "pt" as a pointer (uint32*)
+ 	 uint32* pt = NULL;
+ 	 // FIX: Pass "&pt" (a uint32**) to get_page_table
+ 	 int ret = get_page_table(ptr_user_page_directory, guard_page_va, &pt);
+
+ 	 if (ret == TABLE_IN_MEMORY && pt != NULL) 
+ 	 {
+
+ 	 	 pt[PTX(guard_page_va)] &= ~PERM_PRESENT; 
+ 	 }
+
+ 	 // 4. Return pointer to TOP of the stack
+ 	 // FIX: Cast to (void*), not (void)
+ 	 return (void*) (guard_page_va + KERNEL_STACK_SIZE);
 }
 
 /*2024*/
