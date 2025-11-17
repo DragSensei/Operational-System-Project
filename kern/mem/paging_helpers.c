@@ -49,12 +49,24 @@ inline void pt_set_page_permissions(uint32* directory, uint32 virtual_address, u
 //===============================
 //Should get ALL page permissions of the given VA
 //If the page table not exist, return -1
-inline int pt_get_page_permissions(uint32* directory, uint32 virtual_address )
+inline int pt_get_page_permissions(uint32* page_directory, uint32 virtual_address)
 {
-	//TODO: PRACTICE: fill this function.
-	//Comment the following line
-	panic("pt_get_page_permissions() is not implemented yet!");
+    uint32 *page_table;
+
+    // Get kernel-mapped pointer to page table
+    if (get_page_table(page_directory, virtual_address, &page_table) == TABLE_NOT_EXIST)
+        return 0; // No page table → no permissions
+
+    uint32 pte = page_table[PTX(virtual_address)];
+
+    // If not present, return 0
+    if (!(pte & PERM_PRESENT))
+        return 0;
+
+    // Return only permission bits
+    return pte & 0xFFF;
 }
+
 
 //===============================
 //3) CLEAR PAGE TABLE ENTRY

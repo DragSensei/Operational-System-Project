@@ -7,7 +7,7 @@
 #include <inc/assert.h>
 #include <inc/elf.h>
 #include <inc/dynamic_allocator.h>
-
+ 
 #include <kern/proc/user_environment.h>
 #include <kern/trap/trap.h>
 #include <kern/trap/fault_handler.h>
@@ -885,7 +885,7 @@ static int program_segment_alloc_map_copy_workingset(struct Env *e, struct Progr
 //==================================================
 // 5) DYNAMICALLY ALLOCATE SPACE FOR USER DIRECTORY:
 //==================================================
-void * create_user_directory()
+void * create_user_directory() 
 {
 	//[PROJECT] [PROGRAM LOAD] create_user_directory()
 	// Write your code here, remove the panic and write your code
@@ -910,15 +910,25 @@ uint32 __cur_k_stk = KERNEL_HEAP_START;
 //===========================================================
 void* create_user_kern_stack(uint32* ptr_user_page_directory)
 {
-	//TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #1 create_user_kern_stack
-	//Your code is here
-	//Comment the following line
-	panic("create_user_kern_stack() is not implemented yet...!!");
+    // 1. Allocate virtual region for user kernel stack
+    void* stack_base = kmalloc(KERNEL_STACK_SIZE);
+    if (stack_base == NULL)
+        panic("Kernel heap out of memory while creating user kernel stack");
 
-	//allocate space for the user kernel stack.
-	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
-	//return a pointer to the start of the allocated space (including the GUARD PAGE)
+    uint32 base_va = (uint32)stack_base;
+    uint32 *pt = NULL;
+
+    // 2. Mark the bottom page as a GUARD page (NOT PRESENT)
+    int ret = get_page_table(ptr_user_page_directory, base_va, &pt);
+    if (ret == TABLE_IN_MEMORY && pt != NULL)
+    {
+        pt[PTX(base_va)] &= ~PERM_PRESENT;   // remove present bit
+    }
+    
+    // 3. Return pointer to the start INCLUDING the guard page
+    return (void*)base_va;
 }
+
 
 /*2024*/
 //===========================================================

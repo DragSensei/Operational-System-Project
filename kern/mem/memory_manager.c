@@ -177,12 +177,12 @@ int allocate_frame(struct FrameInfo **ptr_frame_info)
 	 ***********************************************************/
 
 	initialize_frame_info(*ptr_frame_info);
-
+    (*ptr_frame_info)->va = 0;
 	if (!lock_already_held)
 	{
 		release_kspinlock(&MemFrameLists.mfllock);
 	}
-
+    
 	return 0;
 }
 
@@ -355,6 +355,7 @@ void __static_cpt(uint32 *ptr_directory, const uint32 virtual_address, uint32 **
 //
 int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint32 virtual_address, int perm)
 {
+	ptr_frame_info->va = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	// Fill this function in
 	uint32 physical_address = to_physical_address(ptr_frame_info);
 	uint32 *ptr_page_table;
@@ -491,6 +492,7 @@ void unmap_frame(uint32 *ptr_page_directory, uint32 virtual_address)
 
 		tlb_invalidate(ptr_page_directory, (void *)virtual_address);
 	}
+	ptr_frame_info->va = 0;
 }
 
 
