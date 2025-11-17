@@ -204,8 +204,27 @@ void free_block(void *va)
 //===========================
 void *realloc_block(void* va, uint32 new_size)
 {
+	{
 	//TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - realloc_block
 	//Your code is here
+	if(va == NULL)
+		return alloc_block(new_size);
+
+	if(new_size == 0)
+	{
+		free_block(va);
+		return NULL;
+	}
+
+	void* newwVA = alloc_block(new_size);
+	char* el_asl = (char*)va;
+	char* el_wegha = (char*)newwVA;
+	int pastSZ = get_block_size(va);
+	for (int i = 0; i < pastSZ; i++)
+		el_wegha[i] = el_asl[i];
+	free_block(va);
+	return newwVA;
 	//Comment the following line
-	panic("realloc_block() Not implemented yet");
+	//panic("realloc_block() Not implemented yet");
+}
 }

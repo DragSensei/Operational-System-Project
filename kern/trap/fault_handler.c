@@ -161,40 +161,32 @@ void fault_handler(struct Trapframe *tf)
 	}
 	else
 	{
-		if (userTrap) //youssef
+if (userTrap) //youssef
 		{ 
 			
 		    // (1) Pointing to UNMARKED page in user heap (i.e., PERM_UHPAGE = 0)
 		    // (2) Pointing to KERNEL
 		    // (3) Exists with READ-ONLY permissions while writing
 		    // If any invalid case occurs: exit process using env_exit()
-		    int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
+		    int perm;
+			perm = pt_get_page_permissions(faulted_env->env_page_directory,fault_va);
 
-		    // 1. Pointing outside user heap range
-		    if (fault_va < USER_HEAP_START || fault_va >= USER_HEAP_MAX)
-		    {
-		        env_exit();
-		    }
+			if (fault_va >= USER_LIMIT) {
+				env_exit();
+				
+			} else if ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT)) {
+				env_exit();
+			}
 
-
-		    // 2. Pointing to UNMARKED page in user heap (PERM_UHPAGE not set)
-		    if ((perms & PERM_PRESENT) && ((perms & PERM_UHPAGE) == 0))
-		    {
-		        env_exit();
-		    }
-
-		    // 3. Pointing to kernel memory
-		    if (fault_va >= KERNEL_BASE)
-		    {
-		        env_exit();
-		    }
-
-		    // 4. Writing to a read-only page
-		    if ((tf->tf_err & FEC_WR) && ((perms & PERM_WRITEABLE) == 0))
-		    {
-		        env_exit();
-		    }
+			else if (fault_va >= USER_HEAP_START) {
+				if (fault_va < USER_HEAP_MAX) {
+					if (!(perm & PERM_AVAILABLE)) {
+						env_exit();
+					}
+				}
+			}
 		}
+
 
 		/*2022: Check if fault due to Access Rights */
 		int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);

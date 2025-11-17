@@ -51,22 +51,30 @@ inline void pt_set_page_permissions(uint32* directory, uint32 virtual_address, u
 //If the page table not exist, return -1
 inline int pt_get_page_permissions(uint32* page_directory, uint32 virtual_address)
 {
-    uint32 *page_table;
+    uint32 pd_index = PDX(virtual_address); // Page directory index
+    uint32 pt_index = PTX(virtual_address); // Page table index
 
-    // Get kernel-mapped pointer to page table
-    if (get_page_table(page_directory, virtual_address, &page_table) == TABLE_NOT_EXIST)
-        return 0; // No page table → no permissions
+    uint32 pde = page_directory[pd_index];
+    if (!(pde & PERM_PRESENT)) {
+        // Page table not present
+        return 0;
+    }
 
-    uint32 pte = page_table[PTX(virtual_address)];
+    // Get the page table pointer (convert PDE to kernel virtual address)
+#if USE_KHEAP
+    uint32* page_table = (uint32*)kheap_virtual_address(EXTRACT_ADDRESS(pde));
+#else
+    uint32* page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(pde));
+#endif
 
-    // If not present, return 0
-    if (!(pte & PERM_PRESENT))
+    uint32 pte = page_table[pt_index];
+
+    // If page not present or invalid, return 0
+    if (!(pte & PERM_PRESENT) && !(pte & PERM_BUFFERED))
         return 0;
 
-    // Return only permission bits
-    return pte & 0xFFF;
+    return pte & 0xFFF; // return only permission bits
 }
-
 
 //===============================
 //3) CLEAR PAGE TABLE ENTRY
