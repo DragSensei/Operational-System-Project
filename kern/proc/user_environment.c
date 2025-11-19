@@ -908,7 +908,7 @@ uint32 __cur_k_stk = KERNEL_HEAP_START;
 //===========================================================
 // 6) ALLOCATE SPACE FOR USER KERNEL STACK (One Per Process):
 //===========================================================
-void* create_user_kern_stack(uint32* ptr_user_page_directory)
+void* create_user_kern_stack(uint32* ptr_user_page_directory) //youssef
 {
     // 1. Allocate virtual region for user kernel stack
     void* stack_base = kmalloc(KERNEL_STACK_SIZE);

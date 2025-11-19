@@ -357,6 +357,7 @@ int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint
 {
 	ptr_frame_info->va = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	// Fill this function in
+	ptr_frame_info->va = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	uint32 physical_address = to_physical_address(ptr_frame_info);
 	uint32 *ptr_page_table;
 	if( get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) == TABLE_NOT_EXIST)
@@ -480,9 +481,9 @@ void unmap_frame(uint32 *ptr_page_directory, uint32 virtual_address)
 	if( ptr_frame_info != 0 )
 	{
 		if (ptr_frame_info->isBuffered && !CHECK_IF_KERNEL_ADDRESS((uint32)virtual_address))
-			cprintf("WARNING: Freeing BUFFERED frame at va %x!!!\n", virtual_address) ;
+		cprintf("WARNING: Freeing BUFFERED frame at va %x!!!\n", virtual_address) ;
 		decrement_references(ptr_frame_info);
-
+		
 		/*********************************************************************************/
 		/*NEW'23 el7:)
 		 * unmap_frame(): KEEP THE VALUES OF THE AVAILABLE BITS*/
@@ -600,6 +601,3 @@ struct freeFramesCounters calculate_available_frames()
 }
 
 ///============================================================================================
-
-
-

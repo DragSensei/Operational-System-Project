@@ -97,6 +97,7 @@ void fault_handler(struct Trapframe *tf)
 	//If same fault va for 3 times, then panic
 	//UPDATE: 3 FAULTS MUST come from the same environment (or the kernel)
 	struct Env* cur_env = get_cpu_proc();
+	cprintf("%d", cur_env);
 	if (last_fault_va == fault_va && last_faulted_env == cur_env)
 	
 	{
@@ -130,10 +131,10 @@ void fault_handler(struct Trapframe *tf)
 			panic("User Kernel Stack: overflow exception!");
 		else if (fault_va >= (uint32)c->stack && fault_va < (uint32)c->stack + PAGE_SIZE)
 			panic("Sched Kernel Stack of CPU #%d: overflow exception!", c - CPUS);
-#if USE_KHEAP
-		if (fault_va >= KERNEL_HEAP_MAX)
-			panic("Kernel: heap overflow exception!");
-#endif
+		#if USE_KHEAP
+				if (fault_va >= KERNEL_HEAP_MAX)
+					panic("Kernel: heap overflow exception!");
+		#endif
 	}
 	//2017: Check stack underflow for User
 	else
