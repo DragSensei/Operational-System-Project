@@ -13,6 +13,7 @@
 #include <kern/mem/memory_manager.h>
 #include <kern/mem/kheap.h>
 
+
 //2014 Test Free(): Set it to bypass the PAGE FAULT on an instruction with this length and continue executing the next one
 // 0 means don't bypass the PAGE FAULT
 uint8 bypassInstrLength = 0;
@@ -80,7 +81,7 @@ uint32 last_eip = 0;
 uint32 before_last_eip = 0;
 uint32 last_fault_va = 0;
 uint32 before_last_fault_va = 0;
-int8 num_repeated_fault  = 0;
+uint8 num_repeated_fault  = 0;
 extern uint32 sys_calculate_free_frames() ;
 
 struct Env* last_faulted_env = NULL;
@@ -98,6 +99,7 @@ void fault_handler(struct Trapframe *tf)
 	struct Env* cur_env = get_cpu_proc();
 	cprintf("%d", cur_env);
 	if (last_fault_va == fault_va && last_faulted_env == cur_env)
+	
 	{
 		num_repeated_fault++ ;
 		if (num_repeated_fault == 3)
@@ -160,39 +162,32 @@ void fault_handler(struct Trapframe *tf)
 	}
 	else
 	{
-		if (userTrap) // Youssef 3ebed 7ob el alb.
-		{
+if (userTrap) //youssef
+		{ 
+			
 		    // (1) Pointing to UNMARKED page in user heap (i.e., PERM_UHPAGE = 0)
 		    // (2) Pointing to KERNEL
 		    // (3) Exists with READ-ONLY permissions while writing
 		    // If any invalid case occurs: exit process using env_exit()
-		    int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
+		    int perm;
+			perm = pt_get_page_permissions(faulted_env->env_page_directory,fault_va);
 
-		    // 1. Pointing outside user heap range
-		    if (fault_va < USER_HEAP_START || fault_va >= USER_HEAP_MAX)
-		    {
-		        env_exit();
-		    }
+			if (fault_va >= USER_LIMIT) {
+				env_exit();
+				
+			} else if ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT)) {
+				env_exit();
+			}
 
-			
-		    // 2. Pointing to UNMARKED page in user heap (PERM_UHPAGE not set)
-		    if ((perms & PERM_PRESENT) && ((perms & PERM_UHPAGE) == 0))
-		    {
-		        env_exit();
-		    }
-
-		    // 3. Pointing to kernel memory
-		    if (fault_va >= KERNEL_BASE)
-		    {
-		        env_exit();
-		    }
-
-		    // 4. Writing to a read-only page
-		    if ((tf->tf_err & FEC_WR) && ((perms & PERM_WRITEABLE) == 0))
-		    {
-		        env_exit();
-		    }
+			else if (fault_va >= USER_HEAP_START) {
+				if (fault_va < USER_HEAP_MAX) {
+					if (!(perm & PERM_AVAILABLE)) {
+						env_exit();
+					}
+				}
+			}
 		}
+
 
 		/*2022: Check if fault due to Access Rights */
 		int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
@@ -200,7 +195,7 @@ void fault_handler(struct Trapframe *tf)
 			panic("Page @va=%x is exist! page fault due to violation of ACCESS RIGHTS\n", fault_va) ;
 		/*============================================================================================*/
 
-
+ 
 		// we have normal page fault =============================================================
 		faulted_env->pageFaultsCounter ++ ;
 
@@ -278,13 +273,39 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 	int iWS =faulted_env->page_last_WS_index;
 	uint32 wsSize = env_page_ws_get_size(faulted_env);
 #endif
-	if(wsSize < (faulted_env->page_WS_max_size))
-	{
-		//TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
-		//Your code is here
-		//Comment the following line
-		panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
-	}
+	if (wsSize < faulted_env->page_WS_max_size)
+{
+    uint32 base_va = ROUNDDOWN(fault_va, PAGE_SIZE);
+    struct FrameInfo *new_frame = NULL;
+
+    // Allocate a free frame
+    allocate_frame(&new_frame);
+
+    // Map the frame into the environment page directory
+    map_frame(faulted_env->env_page_directory, new_frame, base_va, PERM_USER | PERM_WRITEABLE);
+
+    // Load page from page file if it exists
+    int ret = pf_read_env_page(faulted_env, (void*)base_va);
+    if (ret == E_PAGE_NOT_EXIST_IN_PF)
+    {
+        // Only allow stack or heap growth
+        if (!((base_va >= USTACKBOTTOM && base_va < USTACKTOP) ||
+              (base_va >= USER_HEAP_START && base_va < USER_HEAP_MAX)))
+        {
+            // Invalid access → exit environment
+            unmap_frame(faulted_env->env_page_directory, base_va);
+            env_exit();
+            return;
+        }
+    }
+
+    // Add to working set
+    struct WorkingSetElement *ws_elem = env_page_ws_list_create_element(faulted_env, base_va);
+    LIST_INSERT_TAIL(&faulted_env->page_WS_list, ws_elem);
+    faulted_env->page_last_WS_element = ws_elem;
+}
+
+
 	else
 	{
 		if (isPageReplacmentAlgorithmOPTIMAL())
