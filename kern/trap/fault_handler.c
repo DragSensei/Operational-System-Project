@@ -209,9 +209,8 @@ void fault_handler(struct Trapframe *tf)
 			if (fault_va >= USER_LIMIT)
 			{
 				env_exit();
-			}
-			else if ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT))
-			{
+				
+			} else if (perm & PERM_PRESENT) {
 				env_exit();
 			}
 

@@ -79,9 +79,47 @@ int share_chunk(uint32* page_directory, uint32 source_va,uint32 dest_va, uint32 
 //	Allocation should be aligned on page boundary. However, the given range may be not aligned.
 int allocate_chunk(uint32* page_directory, uint32 va, uint32 size, uint32 perms)
 {
-	//TODO: PRACTICE: fill this function.
-	//Comment the following line
-	panic("allocate_chunk() is not implemented yet...!!");
+	uint32 start = ROUNDDOWN(va, PAGE_SIZE);
+	uint32 end = ROUNDUP(va + size, PAGE_SIZE);
+
+	// 1. Check if any page in the range already exists
+	for (uint32 curr_va = start; curr_va < end; curr_va += PAGE_SIZE)
+	{
+		uint32 *ptr_page_table = NULL;
+		int ret = get_page_table(page_directory, curr_va, &ptr_page_table);
+
+		if (ret == TABLE_IN_MEMORY)
+		{
+			if (ptr_page_table[PTX(curr_va)] & PERM_PRESENT)
+			{
+				return -1;
+			}
+		}
+	}
+
+	// 2. Allocate or mark pages
+	for (uint32 curr_va = start; curr_va < end; curr_va += PAGE_SIZE)
+	{
+		uint32 *ptr_page_table = NULL;
+		int ret = get_page_table(page_directory, curr_va, &ptr_page_table);
+
+		if (ret == TABLE_NOT_EXIST)
+		{
+			ptr_page_table = create_page_table(page_directory, curr_va);
+		}
+
+		if (perms & PERM_PRESENT)
+		{
+			struct FrameInfo *ptr_frame_info;
+			allocate_frame(&ptr_frame_info);
+			map_frame(page_directory, ptr_frame_info, curr_va, perms);
+		}
+		else
+		{
+			ptr_page_table[PTX(curr_va)] = perms | PERM_UHPAGE;
+		}
+	}
+	return 0;
 }
 
 
@@ -147,16 +185,27 @@ void* sys_sbrk(int numOfPages)
 //=====================================
 void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
-	/*====================================*/
-	/*Remove this line before start coding*/
-//		inctst();
-//		return;
-	/*====================================*/
+    uint32 start = ROUNDDOWN(virtual_address, PAGE_SIZE);
+    uint32 end = ROUNDUP(virtual_address + size, PAGE_SIZE);
 
-	//TODO: [PROJECT'25.IM#2] USER HEAP - #2 allocate_user_mem
-	//Your code is here
-	//Comment the following line
-	panic("allocate_user_mem() is not implemented yet...!!");
+    for (uint32 va = start; va < end; va += PAGE_SIZE) 
+    {
+        struct FrameInfo *ptr_frame_info;
+        int ret = allocate_frame(&ptr_frame_info);
+
+
+        if (ret != 0) 
+            panic("allocate_user_mem: No enough memory (E_NO_MEM)");
+        
+
+        ret = map_frame(e->env_page_directory, ptr_frame_info, va, PERM_USER | PERM_WRITEABLE);
+        if (ret != 0) {
+            free_frame(ptr_frame_info);
+            panic("allocate_user_mem: map_frame failed");
+        }
+
+        env_page_ws_list_create_element(e, va);
+    }
 }
 
 //=====================================

@@ -1,5 +1,4 @@
 #include <inc/lib.h>
-
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
@@ -7,6 +6,7 @@
 //==============================================
 // [1] INITIALIZE USER HEAP:
 //==============================================
+uint32 BLK_ALLOC_LIMIT = USER_HEAP_START + DYN_ALLOC_MAX_SIZE;
 int __firstTimeFlag = 1;
 void uheap_init()
 {
@@ -52,14 +52,63 @@ void return_page(void* va)
 void* malloc(uint32 size)
 {
 	//==============================================================
-	//DON'T CHANGE THIS CODE========================================
+	//==============================================================
 	uheap_init();
 	if (size == 0) return NULL ;
 	//==============================================================
-	//TODO: [PROJECT'25.IM#2] USER HEAP - #1 malloc
-	//Your code is here
+	//==============================================================
+
+	if (size > DYN_ALLOC_MAX_BLOCK_SIZE) {
+		uint32 rounded_size = ROUNDUP(size, PAGE_SIZE); uint32 num_of_pages = rounded_size / PAGE_SIZE;
+		uint32 str_ptr = BLK_ALLOC_LIMIT + PAGE_SIZE;
+		uint32 end_ptr = USER_HEAP_MAX;
+		uint32 found_va = 0; uint32 counter = 0;
+
+		for (uint32 i = str_ptr; i < end_ptr; i += PAGE_SIZE) 
+		{
+			if ((vpd[PDX(i)] & PERM_PRESENT) == 0) 
+			{
+				if (counter == 0) 
+					found_va = i;
+				counter++;
+			}
+			else
+			{
+				if ((vpt[VPN(i)] & (PERM_PRESENT | PERM_AVAILABLE)) == 0) 
+				{
+					if (counter == 0)
+						found_va = i;
+					counter++;
+				}
+				else 
+				{
+					counter = 0;
+					found_va = 0;
+				}
+			}
+			if (counter == num_of_pages)
+				break;
+		}
+
+		if (counter < num_of_pages) 
+		{
+			return NULL;
+		}
+
+		sys_allocate_chunk(found_va, rounded_size, PERM_USER | PERM_AVAILABLE | PERM_UHPAGE);
+		if (found_va + rounded_size > uheapPageAllocBreak)
+		{
+			uheapPageAllocBreak = found_va + rounded_size;
+		}
+		return (void*) found_va;
+		
+	}
+	else {
+		return (void*) alloc_block(size);
+	}
+	return NULL;
 	//Comment the following line
-	panic("malloc() is not implemented yet...!!");
+	// panic("malloc() is not implemented yet...!!");
 }
 
 //=================================
