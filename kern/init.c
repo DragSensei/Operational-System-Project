@@ -131,6 +131,7 @@ void FOS_initialize()
 	cprintf("********************************************************************\n");
 
 	// start the kernel command prompt.
+	execute_command("run tf1 3000");
 	while (1==1)
 	{
 		cprintf("\nWelcome to the FOS kernel command prompt!\n");

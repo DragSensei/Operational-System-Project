@@ -6,6 +6,14 @@
 //==============================================
 // [1] INITIALIZE USER HEAP:
 //==============================================
+struct UserHeapAlloc {
+	uint32 va;
+	uint32 size;
+};
+#define MAX_UHEAP_ALLOCS 10000
+struct UserHeapAlloc uheap_allocs[MAX_UHEAP_ALLOCS];
+int uheap_alloc_count = 0;
+
 uint32 BLK_ALLOC_LIMIT = USER_HEAP_START + DYN_ALLOC_MAX_SIZE;
 int __firstTimeFlag = 1;
 void uheap_init()
@@ -95,7 +103,14 @@ void* malloc(uint32 size)
 			return NULL;
 		}
 
-		sys_allocate_chunk(found_va, rounded_size, PERM_USER | PERM_AVAILABLE | PERM_UHPAGE);
+		sys_allocate_user_mem(found_va, rounded_size);
+
+		if (uheap_alloc_count < MAX_UHEAP_ALLOCS) {
+			uheap_allocs[uheap_alloc_count].va = found_va;
+			uheap_allocs[uheap_alloc_count].size = rounded_size;
+			uheap_alloc_count++;
+		}
+
 		if (found_va + rounded_size > uheapPageAllocBreak)
 		{
 			uheapPageAllocBreak = found_va + rounded_size;
@@ -116,10 +131,46 @@ void* malloc(uint32 size)
 //=================================
 void free(void* virtual_address)
 {
-	//TODO: [PROJECT'25.IM#2] USER HEAP - #3 free
-	//Your code is here
-	//Comment the following line
-	panic("free() is not implemented yet...!!");
+	//==================================================================================//
+	//============================== GIVEN FUNCTIONS ===================================//
+	//==================================================================================//
+	if (virtual_address == NULL)
+	{
+		return;
+	}
+
+	// Zone 1: The Block Allocator (Small Allocations)
+	if ((uint32)virtual_address >= USER_HEAP_START && (uint32)virtual_address < USER_HEAP_START + DYN_ALLOC_MAX_SIZE)
+	{
+		free_block(virtual_address);
+		return;
+	}
+	// Zone 2: The Page Allocator (Large Allocations)
+	else if ((uint32)virtual_address >= USER_HEAP_START + DYN_ALLOC_MAX_SIZE && (uint32)virtual_address < USER_HEAP_MAX)
+	{
+		uint32 size = 0;
+		int found_idx = -1;
+		for (int i = 0; i < uheap_alloc_count; i++) {
+			if (uheap_allocs[i].va == (uint32)virtual_address) {
+				size = uheap_allocs[i].size;
+				found_idx = i;
+				break;
+			}
+		}
+
+		if (found_idx != -1) {
+			uheap_allocs[found_idx] = uheap_allocs[uheap_alloc_count - 1];
+			uheap_alloc_count--;
+			sys_free_user_mem((uint32)virtual_address, size);
+		} else {
+			return;
+		}
+	}
+	// Zone 3: Invalid
+	else
+	{
+		panic("Invalid free address");
+	}
 }
 
 //=================================

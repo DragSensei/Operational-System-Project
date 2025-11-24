@@ -185,27 +185,23 @@ void* sys_sbrk(int numOfPages)
 //=====================================
 void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
-    uint32 start = ROUNDDOWN(virtual_address, PAGE_SIZE);
-    uint32 end = ROUNDUP(virtual_address + size, PAGE_SIZE);
+	uint32 start = ROUNDDOWN(virtual_address, PAGE_SIZE);
+	uint32 end = ROUNDUP(virtual_address + size, PAGE_SIZE);
 
-    for (uint32 va = start; va < end; va += PAGE_SIZE) 
-    {
-        struct FrameInfo *ptr_frame_info;
-        int ret = allocate_frame(&ptr_frame_info);
+	for (uint32 va = start; va < end; va += PAGE_SIZE) 
+	{
+		uint32 *ptr_page_table = NULL;
+		int ret = get_page_table(e->env_page_directory, va, &ptr_page_table);
 
+		// Create page table if it doesn't exist
+		if (ret == TABLE_NOT_EXIST)
+		{
+			ptr_page_table = create_page_table(e->env_page_directory, va);
+		}
 
-        if (ret != 0) 
-            panic("allocate_user_mem: No enough memory (E_NO_MEM)");
-        
-
-        ret = map_frame(e->env_page_directory, ptr_frame_info, va, PERM_USER | PERM_WRITEABLE);
-        if (ret != 0) {
-            free_frame(ptr_frame_info);
-            panic("allocate_user_mem: map_frame failed");
-        }
-
-        env_page_ws_list_create_element(e, va);
-    }
+		// Mark page as available for lazy allocation (with PERM_UHPAGE)
+		ptr_page_table[PTX(va)] = PERM_USER | PERM_WRITEABLE | PERM_AVAILABLE | PERM_UHPAGE;
+	}
 }
 
 //=====================================
@@ -213,21 +209,48 @@ void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 //=====================================
 void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
-	/*====================================*/
-	/*Remove this line before start coding*/
-//		inctst();
-//		return;
-	/*====================================*/
+	uint32 start = ROUNDDOWN(virtual_address, PAGE_SIZE);
+	uint32 end = ROUNDUP(virtual_address + size, PAGE_SIZE);
 
-	//TODO: [PROJECT'25.IM#2] USER HEAP - #4 free_user_mem
-	//Your code is here
-	//Comment the following line
-	panic("free_user_mem() is not implemented yet...!!");
+	// =========================================================================
+	// STEP 1: Free the Pages (Remove from WS, PF, and Unmap)
+	// =========================================================================
+	for (uint32 va = start; va < end; va += PAGE_SIZE)
+	{
+		uint32 *ptr_page_table = NULL;
+		int ret = get_page_table(e->env_page_directory, va, &ptr_page_table);
+
+		if (ret == TABLE_IN_MEMORY)
+		{
+			uint32 entry = ptr_page_table[PTX(va)];
+
+			// 1. Remove from Page File
+			pf_remove_env_page(e, va);
+
+			// 2. Remove from Working Set
+			// Note: Check PRESENT bit to ensure we update the WS list correctly
+			if (entry & PERM_PRESENT)
+			{
+				env_page_ws_invalidate(e, va);
+			}
+			else
+			{
+				unmap_frame(e->env_page_directory, va);
+			}
+
+			// 3. Unmap (Clear PTE and Free Frame)
+			// Checks both PRESENT (in RAM) and AVAILABLE (Allocated but not in RAM)
+			// to ensure the PTE is cleared (unmarked).
+			ptr_page_table[PTX(va)] = 0;
+			tlb_invalidate(e->env_page_directory, (void*)va);
+		}
+		else
+		{
+			//cprintf("KERNEL: page table not in memory for va=%x\n", va);
+		}
+	}
 }
 
-//=====================================
-// 4) FREE USER MEMORY (BUFFERING):
-//=====================================
 void __free_user_mem_with_buffering(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	// your code is here, remove the panic and write your code

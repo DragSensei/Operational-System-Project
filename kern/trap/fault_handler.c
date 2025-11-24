@@ -130,7 +130,7 @@ void fault_handler(struct Trapframe *tf)
 	// If same fault va for 3 times, then panic
 	// UPDATE: 3 FAULTS MUST come from the same environment (or the kernel)
 	struct Env *cur_env = get_cpu_proc();
-	cprintf("%d", cur_env);
+	// cprintf("%d", cur_env);
 	if (last_fault_va == fault_va && last_faulted_env == cur_env)
 
 	{
