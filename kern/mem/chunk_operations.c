@@ -182,11 +182,19 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 	//Your code is here
 	uint32 end_va = ROUNDUP(virtual_address + size, PAGE_SIZE);
 
+	// cprintf("ana fe free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)");
 	for (uint32 va = ROUNDDOWN(virtual_address, PAGE_SIZE); va < end_va; va += PAGE_SIZE)
 	{
 		env_page_ws_invalidate(e, va);
-		pt_set_page_permissions(e->env_page_directory, va, PERM_PRESENT, 0);
-		tlb_invalidate(e->env_page_directory, va);
+		
+		pf_remove_env_page(e, va);
+		int perm = PERM_AVAILABLE | PERM_UHPAGE;
+
+		uint32* ptr_table;
+		if (get_page_table(e->env_page_directory, va, &ptr_table) != TABLE_NOT_EXIST)
+		{	
+			pt_set_page_permissions(e->env_page_directory, va, 0, perm); 
+		}
 	}
 	//Comment the following line
 	// panic("free_user_mem() is not implemented yet...!!");

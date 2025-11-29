@@ -92,8 +92,8 @@ void* malloc(uint32 size)
 	// Page Allocator Logic
 	uint32 rounded_size = ROUNDUP(size, PAGE_SIZE);
 	uint32 num_pages = rounded_size / PAGE_SIZE;
-
-	uint32 str_ptr = uheapPageAllocStart, end_ptr = uheapPageAllocBreak, oldAllocBreak = end_ptr;
+	uint32 str_ptr = uheapPageAllocStart, end_ptr = uheapPageAllocBreak;
+	oldAllocBreak = end_ptr;
 	uint32 limit = USER_HEAP_MAX;
 	uint32 counter = 0;
 	struct FREE_SIZE_OF_PAGES info;
@@ -182,7 +182,7 @@ void* malloc(uint32 size)
 		sys_allocate_user_mem(info.worst_fit_addr, rounded_size);
 		return (void*) info.worst_fit_addr;	
 	}
-	if (end_ptr + rounded_size < limit)
+	if ((limit - end_ptr) >= rounded_size) // 
 	{
 		uint32 extend_block = end_ptr;
 		uheapPageAllocBreak += rounded_size;
@@ -211,13 +211,19 @@ void free(void* virtual_address)
 	uheap_init();
 	if (virtual_address == NULL) return;
 	else if (virtual_address > USER_HEAP_MAX || virtual_address < USER_HEAP_START) return;
-	else if (virtual_address >= USER_HEAP_START && virtual_address < dynAllocEnd) 
+	else if (is_page_free(virtual_address)) return;
+	else if (virtual_address >= USER_HEAP_START && virtual_address < dynAllocEnd)
 	{
 		free_block(virtual_address);
 		return;
 	}
 
 	struct PageAlloc *prev = NULL, *curr = page_alloc_list;
+
+	if (curr == NULL)
+	{
+		return;
+	}
 	
 	while (curr != NULL && curr->va != (uint32)virtual_address)
 	{
@@ -245,7 +251,11 @@ void free(void* virtual_address)
 		uheapPageAllocBreak = curr->va;
 		cprintf("break is being shrunk!!\n");
 
-		while (uheapPageAllocBreak > USER_HEAP_START && is_page_free((void*)(uheapPageAllocBreak - PAGE_SIZE))) uheapPageAllocBreak -= PAGE_SIZE;
+		while (uheapPageAllocBreak > uheapPageAllocStart && is_page_free((void*)(uheapPageAllocBreak - PAGE_SIZE))) 
+		{
+			uheapPageAllocBreak -= PAGE_SIZE;
+			if (uheapPageAllocBreak == oldAllocBreak) break;
+		}
 	}
 	sys_free_user_mem(curr->va, rounded_size);
 

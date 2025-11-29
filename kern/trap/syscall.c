@@ -283,6 +283,12 @@ void sys_free_user_mem(uint32 virtual_address, uint32 size)
 	if (virtual_address == 0 || (virtual_address >= USER_HEAP_MAX) || (virtual_address < USER_HEAP_START)
 		|| (virtual_address + size >= USER_HEAP_MAX) || (virtual_address + size < USER_HEAP_START))
 	{
+		// cprintf("\n[DEBUG] sys_allocate_user_mem FAIL:\n");
+		// cprintf("  VA: %x\n", virtual_address);
+		// cprintf("  Size: %x\n", size);
+		// cprintf("  End VA: %x\n", virtual_address + size);
+		// cprintf("  Heap Start: %x\n", USER_HEAP_START);
+		// cprintf("  Heap Max: %x\n", USER_HEAP_MAX);
 		cprintf("\nsys_free_user_mem(): ILLEGAL ADDRESS! Process will be terminated...\n");
 		env_exit();
 	}
@@ -306,6 +312,12 @@ void sys_allocate_user_mem(uint32 virtual_address, uint32 size)
 	if (virtual_address == 0 || (virtual_address >= USER_HEAP_MAX) || (virtual_address < USER_HEAP_START)
 		|| (virtual_address + size >= USER_HEAP_MAX) || (virtual_address + size < USER_HEAP_START))
 	{
+		// cprintf("\n[DEBUG] sys_allocate_user_mem FAIL:\n");
+		// cprintf("  VA: %x\n", virtual_address);
+		// cprintf("  Size: %x\n", size);
+		// cprintf("  End VA: %x\n", virtual_address + size);
+		// cprintf("  Heap Start: %x\n", USER_HEAP_START);
+		// cprintf("  Heap Max: %x\n", USER_HEAP_MAX);
 		cprintf("\nsys_free_user_mem(): ILLEGAL ADDRESS! Process will be terminated...\n");
 		env_exit();
 	}
