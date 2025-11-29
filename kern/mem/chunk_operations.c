@@ -147,16 +147,24 @@ void* sys_sbrk(int numOfPages)
 //=====================================
 void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
-	/*====================================*/
-	/*Remove this line before start coding*/
-//		inctst();
-//		return;
-	/*====================================*/
+	// cprintf("ANA FEL ALLOCATE USER MEM\n");
+	uint32 end_va = ROUNDUP(virtual_address + size, PAGE_SIZE);
 
-	//TODO: [PROJECT'25.IM#2] USER HEAP - #2 allocate_user_mem
-	//Your code is here
-	//Comment the following line
-	panic("allocate_user_mem() is not implemented yet...!!");
+	for (uint32 va = ROUNDDOWN(virtual_address, PAGE_SIZE); va < end_va; va += PAGE_SIZE)
+	{
+		uint32 *ptr_table = NULL;
+		int ret = get_page_table(e->env_page_directory, va, &ptr_table);
+
+		if (ret == TABLE_NOT_EXIST)
+		{
+			ptr_table = create_page_table(e->env_page_directory, va);
+		}
+
+		int perm = PERM_AVAILABLE | PERM_UHPAGE;
+		// int perm2 = PERM_UHPAGE;
+		pt_set_page_permissions(e->env_page_directory, va, perm, 0);
+	}
+	
 }
 
 //=====================================
@@ -172,8 +180,16 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 
 	//TODO: [PROJECT'25.IM#2] USER HEAP - #4 free_user_mem
 	//Your code is here
+	uint32 end_va = ROUNDUP(virtual_address + size, PAGE_SIZE);
+
+	for (uint32 va = ROUNDDOWN(virtual_address, PAGE_SIZE); va < end_va; va += PAGE_SIZE)
+	{
+		env_page_ws_invalidate(e, va);
+		pt_set_page_permissions(e->env_page_directory, va, PERM_PRESENT, 0);
+		tlb_invalidate(e->env_page_directory, va);
+	}
 	//Comment the following line
-	panic("free_user_mem() is not implemented yet...!!");
+	// panic("free_user_mem() is not implemented yet...!!");
 }
 
 //=====================================

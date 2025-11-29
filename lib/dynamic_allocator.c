@@ -110,7 +110,8 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 	int index = log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE)) - LOG2_MIN_SIZE;
 	int blockSize = 1 << log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE));
 	
-	if (!LIST_EMPTY(&freeBlockLists[index])) {
+	if (!LIST_EMPTY(&freeBlockLists[index])) 
+	{
 		struct BlockElement* ptrBlock = LIST_FIRST(&freeBlockLists[index]);
 		LIST_REMOVE(&freeBlockLists[index], ptrBlock);
 
@@ -118,7 +119,8 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 		pageBlockInfoArr[tmp].num_of_free_blocks--;
 		return ptrBlock;
 	}
-	else if (!LIST_EMPTY(&freePagesList)) {
+	else if (!LIST_EMPTY(&freePagesList)) 
+	{
 		struct PageInfoElement* ptrPage = LIST_FIRST(&freePagesList);
 		LIST_REMOVE(&freePagesList, ptrPage);
 
@@ -128,7 +130,8 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 		ptrPage->num_of_free_blocks =(PAGE_SIZE / blockSize) - 1;
 		
 		uint32 pageAddress = to_page_va(ptrPage);
-		for (int i = 1; i < (PAGE_SIZE / blockSize); i++) {
+		for (int i = 1; i < (PAGE_SIZE / blockSize); i++) 
+		{
 			struct BlockElement* ptrBlock =  
 				(struct BlockElement*)(pageAddress + (i* blockSize));
 			LIST_INSERT_TAIL(&freeBlockLists[index], ptrBlock);

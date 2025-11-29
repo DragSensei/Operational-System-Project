@@ -130,7 +130,6 @@ void fault_handler(struct Trapframe *tf)
 	// If same fault va for 3 times, then panic
 	// UPDATE: 3 FAULTS MUST come from the same environment (or the kernel)
 	struct Env *cur_env = get_cpu_proc();
-	cprintf("%d", cur_env);
 	if (last_fault_va == fault_va && last_faulted_env == cur_env)
 
 	{
@@ -208,10 +207,12 @@ void fault_handler(struct Trapframe *tf)
 
 			if (fault_va >= USER_LIMIT)
 			{
+				cprintf("ANA FEL (fault_va >= USER_LIMIT)\n");
 				env_exit();
 			}
-			else if ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT))
+			else if ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT))			
 			{
+				cprintf("ANA FEL ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT))	\n");
 				env_exit();
 			}
 
@@ -221,6 +222,7 @@ void fault_handler(struct Trapframe *tf)
 				{
 					if (!(perm & PERM_AVAILABLE))
 					{
+						cprintf("ANA FEL if (fault_va < USER_HEAP_MAX) w gwaha: if (!(perm & PERM_AVAILABLE))	\n");
 						env_exit();
 					}
 				}
