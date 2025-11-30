@@ -23,7 +23,8 @@ void* sget(int32 ownerEnvID, char *sharedVarName);
 void free(void* virtual_address);
 void sfree(void* virtual_address);
 void *realloc(void *virtual_address, uint32 new_size);
-int is_page_free(void *va);
-
+uint32 is_user_page_free(void *va);
+void MARK_INDEX_BUSY(uint32 num_pages, uint32 index);
+void MARK_INDEX_FREE(uint32 num_pages, uint32 index);
 
 #endif

@@ -1,5 +1,5 @@
 #include <inc/lib.h>
-
+#define UHEAP_PAGES ((USER_HEAP_MAX - USER_HEAP_START) / PAGE_SIZE)
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
@@ -46,33 +46,38 @@ struct FREE_SIZE_OF_PAGES
 	int hole;
 };
 
-struct PageAlloc {
-	uint32 va;
-	uint32 size;
-	struct PageAlloc *next;
-};
-struct PageAlloc *page_alloc_list = NULL;
+uint32 allocations[UHEAP_PAGES];
 
 uint32 oldAllocBreak = 0; // for the free function
 
-
-int is_page_free(void *va)
+uint32 is_user_page_free(void* va)
 {
-	struct PageAlloc *ptr = page_alloc_list;
-	while (ptr != NULL)
-	{
-		uint32 start_va = ptr->va;
-		uint32 end_va = ptr->size + ptr->va;
+	uint32 index = ((uint32)va - USER_HEAP_START) / PAGE_SIZE;
+	if (allocations[index] == 0)
+		return 1;
+	return 0;
+}
 
-		if ((uint32*)va >= (uint32*)start_va && (uint32*)va < (uint32*)end_va )
-		{
-			return 0;
-		}
-		
-		ptr = ptr->next;
+void ARRAY_ADD(uint32 va, uint32 size)
+{
+	uint32 index = (va - USER_HEAP_START) / PAGE_SIZE;
+	allocations[index] = size;
+	MARK_INDEX_BUSY(size / PAGE_SIZE, index);
+}
+
+void MARK_INDEX_BUSY(uint32 num_pages, uint32 index)
+{
+	for (int i = 1; i < num_pages; i++)
+	{
+		allocations[index + i] = 1;
 	}
-	
-	return 1;
+}
+void MARK_INDEX_FREE(uint32 num_pages, uint32 index)
+{
+	for (int i = 0; i < num_pages; i++)
+	{
+		allocations[index + i] = 0;
+	}
 }
 
 //=================================
@@ -105,7 +110,7 @@ void* malloc(uint32 size)
 
 	for (uint32 i = str_ptr; i < end_ptr; i += PAGE_SIZE)
 	{
-		if (is_page_free((void*)i))
+		if (is_user_page_free((void*)i))
 		{
 			if (!info.hole)
 			{
@@ -122,14 +127,9 @@ void* malloc(uint32 size)
 				if (info.curr_hole_size == num_pages)
 				{
 					// cprintf("ANA FEL if (info.hole)\n");
-					struct PageAlloc* alloc_page = alloc_block(sizeof(struct PageAlloc));
-					if (!alloc_page) return NULL;
 
-					alloc_page->va = info.curr_hole_va;
-					alloc_page->size = rounded_size;
-					alloc_page->next = page_alloc_list;
-					page_alloc_list = alloc_page;
-
+					ARRAY_ADD(info.curr_hole_va, rounded_size);
+					
 					sys_allocate_user_mem(info.curr_hole_va, rounded_size);
 					return (void*) info.curr_hole_va;
 				}
@@ -152,13 +152,7 @@ void* malloc(uint32 size)
 	{
 		// cprintf("ANA FEL (info.curr_hole_size == num_pages)\n");
 
-		struct PageAlloc* alloc_page = alloc_block(sizeof(struct PageAlloc));
-		if (!alloc_page) return NULL;
-
-		alloc_page->va = info.curr_hole_va;
-		alloc_page->size = rounded_size;
-		alloc_page->next = page_alloc_list;
-		page_alloc_list = alloc_page;
+		ARRAY_ADD(info.curr_hole_va, rounded_size);
 
 		sys_allocate_user_mem(info.curr_hole_va, rounded_size);
 		return (void*) info.curr_hole_va;	
@@ -171,13 +165,8 @@ void* malloc(uint32 size)
 	if (info.worst_fit_addr != 0)
 	{
 		// cprintf("ANA FEL (info.curr_hole_size == num_pages)\n");
-		struct PageAlloc* alloc_page = alloc_block(sizeof(struct PageAlloc));
-		if (!alloc_page) return NULL;
 
-		alloc_page->va = info.worst_fit_addr;
-		alloc_page->size = rounded_size;
-		alloc_page->next = page_alloc_list;
-		page_alloc_list = alloc_page;
+		ARRAY_ADD(info.worst_fit_addr, rounded_size);
 
 		sys_allocate_user_mem(info.worst_fit_addr, rounded_size);
 		return (void*) info.worst_fit_addr;	
@@ -187,14 +176,8 @@ void* malloc(uint32 size)
 		uint32 extend_block = end_ptr;
 		uheapPageAllocBreak += rounded_size;
 
-		// cprintf("ANA FEL (end_ptr + rounded_size < limit)\n");
-		struct PageAlloc* alloc_page = alloc_block(sizeof(struct PageAlloc));
-		if (!alloc_page) return NULL;
 
-		alloc_page->va = extend_block;
-		alloc_page->size = rounded_size;
-		alloc_page->next = page_alloc_list;
-		page_alloc_list = alloc_page;
+		ARRAY_ADD(extend_block, rounded_size);
 
 		sys_allocate_user_mem(extend_block, rounded_size);
 		return (void*) extend_block;	
@@ -209,57 +192,57 @@ void* malloc(uint32 size)
 void free(void* virtual_address)
 {
 	uheap_init();
+	uint32 va = (uint32) virtual_address;
 	if (virtual_address == NULL) return;
-	else if (virtual_address > USER_HEAP_MAX || virtual_address < USER_HEAP_START) return;
-	else if (is_page_free(virtual_address)) return;
-	else if (virtual_address >= USER_HEAP_START && virtual_address < dynAllocEnd)
+	else if (va > USER_HEAP_MAX || va < USER_HEAP_START) return;
+	else if (is_user_page_free(virtual_address)) return;
+	else if (va >= USER_HEAP_START && va < dynAllocEnd)
 	{
 		free_block(virtual_address);
 		return;
 	}
-
-	struct PageAlloc *prev = NULL, *curr = page_alloc_list;
-
-	if (curr == NULL)
-	{
-		return;
-	}
 	
-	while (curr != NULL && curr->va != (uint32)virtual_address)
-	{
-		prev = curr;
-		curr = curr->next;
-	}
+	// while (curr != NULL && curr->va != (uint32)virtual_address)
+	// {
+	// 	prev = curr;
+	// 	curr = curr->next;
+	// }
 
-	if (curr == NULL)
-	{
-		return;
-	}
+	// if (curr == NULL)
+	// {
+	// 	return;
+	// }
 
-	if (prev == NULL)
-	{
-		page_alloc_list = curr->next;
-	}
-	else
-	{
-		prev->next = curr->next;
-	}
+	// if (prev == NULL)
+	// {
+	// 	page_alloc_list = curr->next;
+	// }
+	// else
+	// {
+	// 	prev->next = curr->next;
+	// }
 
-	uint32 rounded_size = curr->size;
-	if (uheapPageAllocBreak == (curr->va + curr->size))
+	// uint32 rounded_size = curr->size;
+	int index = (va - USER_HEAP_START) / PAGE_SIZE;
+	uint32 size = allocations[index];
+
+	MARK_INDEX_FREE((allocations[index] / PAGE_SIZE), index);
+	if (size == 0) return;
+
+	if (uheapPageAllocBreak == (va + size))
 	{
-		uheapPageAllocBreak = curr->va;
+		uheapPageAllocBreak = va;
 		cprintf("break is being shrunk!!\n");
 
-		while (uheapPageAllocBreak > uheapPageAllocStart && is_page_free((void*)(uheapPageAllocBreak - PAGE_SIZE))) 
+		while (uheapPageAllocBreak > uheapPageAllocStart && is_user_page_free((void*)(uheapPageAllocBreak - PAGE_SIZE))) 
 		{
 			uheapPageAllocBreak -= PAGE_SIZE;
-			if (uheapPageAllocBreak == oldAllocBreak) break;
+			// if (uheapPageAllocBreak == oldAllocBreak) break;
 		}
 	}
-	sys_free_user_mem(curr->va, rounded_size);
 
-	free_block(curr);
+	sys_free_user_mem(va, size);
+
 }
 
 //=================================
@@ -280,13 +263,38 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 	return NULL;
 }
 
-void *realloc(void *virtual_address, uint32 new_size)
-{
-	panic("realloc() is not implemented yet...!!");
-	return NULL;
+//=================================
+// REALLOC USER SPACE:
+//=================================
+//Attempts to resize the allocated space at "virtual_address" to "new_size" bytes,
+//possibly moving it in the heap.
+//If successful, returns the new virtual_address, in which case the old virtual_address must no longer be accessed.
+//On failure, returns a null pointer, and the old virtual_address remains valid.
+//A call with virtual_address = null is equivalent to malloc().
+//A call with new_size = zero is equivalent to free().
+// Hint: you may need to use the sys_move_user_mem(...)
+//which switches to the kernel mode, calls move_user_mem(...)
+//in "kern/mem/chunk_operations.c", then switch back to the user mode here
+//the move_user_mem() function is empty, make sure to implement it.
+void *realloc(void *virtual_address, uint32 new_size){
+    uheap_init();
+    panic("realloc() is not implemented yet...!!");
 }
-
-void sfree(void* virtual_address)
-{
-	panic("sfree() is not implemented yet...!!");
+//=================================
+// FREE SHARED VARIABLE:
+//=================================
+//    This function frees the shared variable at the given virtual_address
+//    To do this, we need to switch to the kernel, free the pages AND "EMPTY" PAGE TABLES
+//    from main memory then switch back to the user again.
+//
+//    use sys_delete_shared_object(...); which switches to the kernel mode,
+//    calls delete_shared_object(...) in "shared_memory_manager.c", then switch back to the user mode here
+//    the delete_shared_object() function is empty, make sure to implement it.
+void sfree(void* virtual_address){
+    //TODO: [PROJECT'25.BONUS#5] EXIT #2 - sfree
+    //Your code is here
+    //Comment the following line
+    panic("sfree() is not implemented yet...!!");
+    //1) you should find the ID of the shared variable at the given address
+    //2) you need to call sys_freeSharedObject()
 }

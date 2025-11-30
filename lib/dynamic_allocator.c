@@ -92,7 +92,8 @@ int log2(int number) {
     if (number <= 1) return 0;
     uint32 a = 0;
     number--;
-    while (number > 0) {
+    while (number > 0) 
+	{
         number >>= 1;
         a++;
     }
@@ -141,7 +142,9 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 	}
 
 
-	while (LIST_EMPTY(&freeBlockLists[index]) && index <= (LOG2_MAX_SIZE - LOG2_MIN_SIZE)) {
+	while (index <= (LOG2_MAX_SIZE - LOG2_MIN_SIZE)) 
+	{
+		if (!LIST_EMPTY(&freeBlockLists[index])) break;
 		index++;
 	}
 	if (index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE))
@@ -219,14 +222,14 @@ void *realloc_block(void* va, uint32 new_size)
 		return NULL;
 	}
 
-	void* newwVA = alloc_block(new_size);
-	char* el_asl = (char*)va;
-	char* el_wegha = (char*)newwVA;
-	int pastSZ = get_block_size(va);
-	for (int i = 0; i < pastSZ; i++)
-		el_wegha[i] = el_asl[i];
-	free_block(va);
-	return newwVA;
+	if (new_size > DYN_ALLOC_MAX_BLOCK_SIZE)
+		panic("Too big for DYNAMIC ALLOCATOR");
+	
+	uint32 new_va;
+	//Condition if the size we can allocate, we allocate and free the old address
+	//and the old data in the old block, we transfer to the new block.
+	// if we cant allocate, we dont free.
+
 	//Comment the following line
 	//panic("realloc_block() Not implemented yet");
 }
