@@ -37,14 +37,21 @@ void return_page(void* va)
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
-struct FREE_SIZE_OF_PAGES 
-{
-	uint32 curr_hole_va;
-	uint32 curr_hole_size;
-	uint32 worst_fit_addr;
-	uint32 worst_fit_size;
-	int hole;
-};
+// struct FREE_SIZE_OF_PAGES 
+// {
+// 	uint32 curr_hole_va;
+// 	uint32 curr_hole_size;
+// 	uint32 worst_fit_addr;
+// 	uint32 worst_fit_size;
+// 	int hole;
+// };
+
+// struct PageAlloc {
+// 	uint32 va;
+// 	uint32 size;
+// 	struct PageAlloc *next;
+// };
+// struct PageAlloc *alloc_list = NULL;
 
 uint32 allocations[UHEAP_PAGES];
 
@@ -80,11 +87,55 @@ void MARK_INDEX_FREE(uint32 num_pages, uint32 index)
 	}
 }
 
+
+void* CUSTOM_FIT_STRAT(struct FREE_SIZE_OF_PAGES* info, uint32 str_ptr, uint32 end_ptr, uint32 num_pages, uint32 rounded_size)
+{
+	for (uint32 i = str_ptr; i < end_ptr; i += PAGE_SIZE)
+	{
+		if (is_user_page_free((void*)i))
+		{
+			if (!info->hole)
+			{
+				info->curr_hole_va = i;
+				info->curr_hole_size = 0;
+				info->hole = 1;
+			}
+			info->curr_hole_size++;
+		}
+		else
+		{
+			if (info->hole)
+			{
+				if (info->curr_hole_size == num_pages)
+				{
+					// cprintf("ANA FEL if (info.hole)\n");
+
+					ARRAY_ADD(info->curr_hole_va, rounded_size);
+					return (void*) info->curr_hole_va;
+				}
+				if (info->curr_hole_size > num_pages)
+				{
+					if (info->curr_hole_size > info->worst_fit_size)
+					{
+						info->worst_fit_size = info->curr_hole_size;
+						info->worst_fit_addr = info->curr_hole_va;
+					}
+				}
+
+				info->hole = 0;
+				info->curr_hole_size = 0;
+			}
+		}
+	}
+
+	return NULL;
+}
 //=================================
 // [1] ALLOCATE SPACE IN USER HEAP:
 //=================================
 void* malloc(uint32 size)
 {
+	
 	uheap_init();
 	if (size == 0) return NULL;
 
@@ -98,9 +149,8 @@ void* malloc(uint32 size)
 	uint32 rounded_size = ROUNDUP(size, PAGE_SIZE);
 	uint32 num_pages = rounded_size / PAGE_SIZE;
 	uint32 str_ptr = uheapPageAllocStart, end_ptr = uheapPageAllocBreak;
-	oldAllocBreak = end_ptr;
 	uint32 limit = USER_HEAP_MAX;
-	uint32 counter = 0;
+
 	struct FREE_SIZE_OF_PAGES info;
 	info.curr_hole_size = 0;
 	info.curr_hole_va = 0;
@@ -108,44 +158,12 @@ void* malloc(uint32 size)
 	info.worst_fit_addr = 0;
 	info.hole = 0;
 
-	for (uint32 i = str_ptr; i < end_ptr; i += PAGE_SIZE)
+	void* allocated_address = CUSTOM_FIT_STRAT(&info, str_ptr, end_ptr, num_pages, rounded_size);
+
+	if (allocated_address != NULL)
 	{
-		if (is_user_page_free((void*)i))
-		{
-			if (!info.hole)
-			{
-				info.curr_hole_va = i;
-				info.curr_hole_size = 0;
-				info.hole = 1;
-			}
-			info.curr_hole_size++;
-		}
-		else
-		{
-			if (info.hole)
-			{
-				if (info.curr_hole_size == num_pages)
-				{
-					// cprintf("ANA FEL if (info.hole)\n");
-
-					ARRAY_ADD(info.curr_hole_va, rounded_size);
-					
-					sys_allocate_user_mem(info.curr_hole_va, rounded_size);
-					return (void*) info.curr_hole_va;
-				}
-				if (info.curr_hole_size > num_pages)
-				{
-					if (info.curr_hole_size > info.worst_fit_size)
-					{
-						info.worst_fit_size = info.curr_hole_size;
-						info.worst_fit_addr = info.curr_hole_va;
-					}
-				}
-
-				info.hole = 0;
-				info.curr_hole_size = 0;
-			}
-		}
+		sys_allocate_user_mem((uint32)allocated_address, rounded_size);
+		return allocated_address;
 	}
 
 	if (info.curr_hole_size == num_pages)
@@ -154,7 +172,7 @@ void* malloc(uint32 size)
 
 		ARRAY_ADD(info.curr_hole_va, rounded_size);
 
-		sys_allocate_user_mem(info.curr_hole_va, rounded_size);
+		sys_allocate_user_mem((uint32) info.curr_hole_va, rounded_size);
 		return (void*) info.curr_hole_va;	
 	}
 	if (info.curr_hole_size > info.worst_fit_size)
@@ -168,7 +186,7 @@ void* malloc(uint32 size)
 
 		ARRAY_ADD(info.worst_fit_addr, rounded_size);
 
-		sys_allocate_user_mem(info.worst_fit_addr, rounded_size);
+		sys_allocate_user_mem((uint32) info.worst_fit_addr, rounded_size);
 		return (void*) info.worst_fit_addr;	
 	}
 	if ((limit - end_ptr) >= rounded_size) // 
@@ -232,7 +250,7 @@ void free(void* virtual_address)
 	if (uheapPageAllocBreak == (va + size))
 	{
 		uheapPageAllocBreak = va;
-		cprintf("break is being shrunk!!\n");
+		// cprintf("break is being shrunk!!\n");
 
 		while (uheapPageAllocBreak > uheapPageAllocStart && is_user_page_free((void*)(uheapPageAllocBreak - PAGE_SIZE))) 
 		{
@@ -250,7 +268,69 @@ void free(void* virtual_address)
 //=================================
 void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 {
-	panic("smalloc() is not implemented yet...!!");
+	uheap_init();
+	uint32 rounded_size = ROUNDUP(size, PAGE_SIZE);
+	uint32 num_pages = rounded_size / PAGE_SIZE;
+	uint32 str_ptr = uheapPageAllocStart, end_ptr = uheapPageAllocBreak;
+	uint32 limit = USER_HEAP_MAX;
+
+	struct FREE_SIZE_OF_PAGES info;
+	info.curr_hole_size = 0;
+	info.curr_hole_va = 0;
+	info.worst_fit_size = 0;
+	info.worst_fit_addr = 0;
+	info.hole = 0;
+
+	void* allocated_address = CUSTOM_FIT_STRAT(&info, str_ptr, end_ptr, num_pages, rounded_size);
+	if (allocated_address != NULL)
+	{
+		sys_create_shared_object(sharedVarName, rounded_size, isWritable, allocated_address);
+		cprintf("Returning allocated_address!\n");
+
+		return allocated_address;
+	}
+
+	if (info.curr_hole_size == num_pages)
+	{
+		// cprintf("ANA FEL (info.curr_hole_size == num_pages)\n");
+
+		ARRAY_ADD(info.curr_hole_va, rounded_size);
+
+		sys_create_shared_object(sharedVarName, rounded_size, isWritable, (uint32) info.curr_hole_va);
+		cprintf("Returning info.curr_hole_va!\n");
+
+		return (void*) info.curr_hole_va;	
+	}
+	if (info.curr_hole_size > info.worst_fit_size)
+	{
+		info.worst_fit_size = info.curr_hole_size;
+		info.worst_fit_addr = info.curr_hole_va;
+	}
+	if (info.worst_fit_addr != 0)
+	{
+		// cprintf("ANA FEL (info.curr_hole_size == num_pages)\n");
+
+		ARRAY_ADD(info.worst_fit_addr, rounded_size);
+
+		sys_create_shared_object(sharedVarName, rounded_size, isWritable, (uint32) info.worst_fit_addr);
+		cprintf("Returning info.worst_fit_addr!\n");
+
+		return (void*) info.worst_fit_addr;	
+	}
+	if ((limit - end_ptr) >= rounded_size) // 
+	{
+		uint32 extend_block = end_ptr;
+		uheapPageAllocBreak += rounded_size;
+
+
+		ARRAY_ADD(extend_block, rounded_size);
+
+		sys_create_shared_object(sharedVarName, rounded_size, isWritable, (uint32) extend_block);
+		cprintf("Returning extend_block!\n");
+		return (void*) extend_block;	
+	}
+	// panic("smalloc() is not implemented yet...!!");
+	cprintf("Returning Null!\n");
 	return NULL;
 }
 
@@ -259,8 +339,76 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 //========================================
 void* sget(int32 ownerEnvID, char *sharedVarName)
 {
-	panic("sget() is not implemented yet...!!");
-	return NULL;
+	/*
+		1. Get the size of the shared variable (use sys_size_of_shared_object())
+		2. if not exists, return NULL
+		3. Apply custom fit strat
+		4. if no suitable space found, return NULL
+		5. call sys get shared object to invoke the kernel for sharing this variable
+		return:
+		if succ: va
+		else: NULL
+	*/
+	uint32 size = sys_size_of_shared_object(ownerEnvID, sharedVarName);
+	if (size < 0) return NULL;
+
+	uint32 rounded_size = ROUNDUP(size, PAGE_SIZE);
+	uint32 num_pages = rounded_size / PAGE_SIZE;
+	uint32 str_ptr = uheapPageAllocStart, end_ptr = uheapPageAllocBreak;
+	uint32 limit = USER_HEAP_MAX;
+
+	struct FREE_SIZE_OF_PAGES info;
+	info.curr_hole_size = 0;
+	info.curr_hole_va = 0;
+	info.worst_fit_size = 0;
+	info.worst_fit_addr = 0;
+	info.hole = 0;
+
+	void* allocated_va = 0;
+	void* temp_shared_va = CUSTOM_FIT_STRAT(&info, str_ptr, end_ptr, num_pages, rounded_size);
+	if (temp_shared_va != NULL)
+	{
+		allocated_va = temp_shared_va;
+	}
+	else if (info.worst_fit_addr != 0 && info.worst_fit_size >= num_pages)
+	{
+		allocated_va = (void*) info.worst_fit_addr;
+		ARRAY_ADD(info.worst_fit_addr, rounded_size);
+	}
+	else if ((limit - end_ptr) >= rounded_size) // 
+	{
+		uint32 extend_block = end_ptr;
+		uheapPageAllocBreak += rounded_size;
+		allocated_va = (void*) extend_block;
+
+		ARRAY_ADD(extend_block, rounded_size);
+	}
+
+	if (allocated_va == NULL) return NULL;
+
+	uint32 ret = sys_get_shared_object(ownerEnvID, sharedVarName, (uint32) allocated_va);
+
+	if (ret < 0)
+	{
+		uint32 index = ((uint32)allocated_va - USER_HEAP_START) / PAGE_SIZE;
+		MARK_INDEX_FREE(num_pages, index);
+
+		if (uheapPageAllocBreak == (allocated_va + rounded_size))
+		{
+			uheapPageAllocBreak -= rounded_size;
+			// cprintf("break is being shrunk!!\n");
+
+			while (uheapPageAllocBreak > uheapPageAllocStart && is_user_page_free((void*)(uheapPageAllocBreak - PAGE_SIZE))) 
+			{
+				uheapPageAllocBreak -= PAGE_SIZE;
+			}
+		}
+		return NULL;
+	}
+
+		
+	// panic("sget() is not implemented yet...!!");
+	return allocated_va;
 }
 
 //=================================

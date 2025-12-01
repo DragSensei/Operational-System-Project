@@ -187,6 +187,7 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 	{
 		env_page_ws_invalidate(e, va);
 		
+		
 		pf_remove_env_page(e, va);
 		int perm = PERM_AVAILABLE | PERM_UHPAGE;
 

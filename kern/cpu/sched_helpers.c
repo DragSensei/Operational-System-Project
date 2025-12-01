@@ -690,15 +690,46 @@ int get_load_average()
 /********* for Priority RR Scheduler *************/
 void env_set_priority(int envID, int priority)
 {
-	//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #1 env_set_priority
-	//Your code is here
-	//Comment the following line
-	panic("env_set_priority() is not implemented yet...!!");
+    struct Env *proc;
+    // 1. Get the process (O(1) with index)
+    int r = envid2env(envID, &proc, 0);
+
+    // 2. Lock
+    acquire_kspinlock(&(ProcessQueues.qlock));
+
+    // 3. Check status directly - NO LOOPS allowed here
+    if (proc->env_status == ENV_READY)
+    {
+        // IT IS IN A READY QUEUE
+        // Remove from the OLD queue using the OLD priority
+        LIST_REMOVE(&(ProcessQueues.env_ready_queues[proc->priority]), proc);
+
+        // Update to NEW priority
+        proc->priority = priority;
+
+        // Reset ticks to prevent immediate re-starvation
+        proc->startticks = timer_ticks();
+
+        // Add to NEW queue (sched_insert_ready handles the tail insertion)
+        sched_insert_ready(proc);
+    }
+    else
+    {
+        // IT IS RUNNING OR BLOCKED
+        // Just update the variable
+        proc->priority = priority;
+        proc->startticks = timer_ticks();
+    }
+
+    // 4. Unlock
+    release_kspinlock(&(ProcessQueues.qlock));
 }
-void sched_set_starv_thresh(uint32 starvThresh)
+
+void sched_set_starv_thresh(uint32 starvThresh)//youssef
 {
 	//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #1 sched_set_starv_thresh
 	//Your code is here
 	//Comment the following line
-	panic("sched_set_starv_thresh() is not implemented yet...!!");
+	//panic("sched_set_starv_thresh() is not implemented yet...!!");
+    prirr_starvation_threshold = starvThresh;
 }

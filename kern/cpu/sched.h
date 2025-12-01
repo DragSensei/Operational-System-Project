@@ -68,6 +68,7 @@ void sched_init_MLFQ(uint8 numOfLevels, uint8 *quantumOfEachLevel);
 void sched_init_BSD(uint8 numOfLevels, uint8 quantum);
 void sched_init_PRIRR(uint8 numOfPriorities, uint8 quantum, uint32 starvThresh);
 
+uint32 prirr_starvation_threshold;
 uint32 isSchedMethodRR();
 uint32 isSchedMethodMLFQ();
 uint32 isSchedMethodBSD();

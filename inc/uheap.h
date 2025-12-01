@@ -17,6 +17,15 @@ uint32 uheapPageAllocBreak ;
 uint32 uheapPlaceStrategy ;
 
 //=================================================================
+struct FREE_SIZE_OF_PAGES 
+{
+	uint32 curr_hole_va;
+	uint32 curr_hole_size;
+	uint32 worst_fit_addr;
+	uint32 worst_fit_size;
+	int hole;
+};
+
 void *malloc(uint32 size);
 void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable);
 void* sget(int32 ownerEnvID, char *sharedVarName);
@@ -26,5 +35,6 @@ void *realloc(void *virtual_address, uint32 new_size);
 uint32 is_user_page_free(void *va);
 void MARK_INDEX_BUSY(uint32 num_pages, uint32 index);
 void MARK_INDEX_FREE(uint32 num_pages, uint32 index);
+void* CUSTOM_FIT_STRAT(struct FREE_SIZE_OF_PAGES* info, uint32 str_ptr, uint32 end_ptr, uint32 num_pages, uint32 rounded_size);
 
 #endif
