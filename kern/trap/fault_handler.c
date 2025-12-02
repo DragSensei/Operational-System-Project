@@ -207,12 +207,10 @@ void fault_handler(struct Trapframe *tf)
 
 			if (fault_va >= USER_LIMIT)
 			{
-				cprintf("ANA FEL (fault_va >= USER_LIMIT)\n");
 				env_exit();
 			}
-			else if ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT))			
+			else if ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT))
 			{
-				cprintf("ANA FEL ((perm & PERM_WRITEABLE) || (perm & PERM_PRESENT))	\n");
 				env_exit();
 			}
 
@@ -222,7 +220,6 @@ void fault_handler(struct Trapframe *tf)
 				{
 					if (!(perm & PERM_AVAILABLE))
 					{
-						cprintf("ANA FEL if (fault_va < USER_HEAP_MAX) w gwaha: if (!(perm & PERM_AVAILABLE))	\n");
 						env_exit();
 					}
 				}
@@ -592,10 +589,16 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			else
 			{
 				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_ws_element);
-				faulted_env->page_last_WS_element = new_ws_element;
 			}
 
-			wsSize++;
+			if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
+			{
+				if (faulted_env->page_last_WS_element == NULL)
+				{
+					faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_list));
+				}
+			}
+
 			return;
 
 			// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
