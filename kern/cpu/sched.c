@@ -221,15 +221,20 @@ void sched_init_BSD(uint8 numOfLevels, uint8 quantum)
 //======================================
 // [6] Initialize PRIORITY RR Scheduler:youssef
 //======================================
+
 void sched_init_PRIRR(uint8 numOfPriorities, uint8 quantum, uint32 starvThresh)
 {
     //TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #2 sched_init_PRIRR
 	//Your code is here
 	//Comment the following line
 	//panic("sched_init_PRIRR() is not implemented yet...!!");
-        ProcessQueues.env_ready_queues = (struct Env_Queue*) kmalloc(numOfPriorities * sizeof(struct Env_Queue));
+	#if USE_KHEAP
+	ProcessQueues.env_ready_queues = (struct Env_Queue*) kmalloc(numOfPriorities * sizeof(struct Env_Queue));
+	#endif
 		num_of_ready_queues = numOfPriorities;
+		#if USE_KHEAP
 		quantums = (uint8*) kmalloc(sizeof(uint8));
+		#endif
 		*quantums = quantum;
 		kclock_set_quantum(quantums[0]);
 		sched_set_starv_thresh(starvThresh);
