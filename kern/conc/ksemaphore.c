@@ -24,18 +24,33 @@ void wait_ksemaphore(struct ksemaphore *ksem)
 {
 	//TODO: [PROJECT'25.IM#5] KERNEL PROTECTION: #6 SEMAPHORE - wait_ksemaphore
 	//Your code is here
+	acquire_kspinlock(&(ksem->lk));
+	ksem->count--;
+	if (ksem->count < 0) {
+		sleep(&(ksem->chan), &(ksem->lk));
+	}
+	release_kspinlock(&(ksem->lk));
 	//Comment the following line
-	panic("wait_ksemaphore() is not implemented yet...!!");
-
+	//panic("wait_ksemaphore() is not implemented yet...!!");
 }
 
 void signal_ksemaphore(struct ksemaphore *ksem)
 {
 	//TODO: [PROJECT'25.IM#5] KERNEL PROTECTION: #7 SEMAPHORE - signal_ksemaphore
 	//Your code is here
+	acquire_kspinlock(&(ksem->lk));
+    ksem->count++;
+    if (ksem->count <= 0) {
+        
+        wakeup_one(&(ksem->chan));
+    }
+    release_kspinlock(&(ksem->lk));
 	//Comment the following line
-	panic("signal_ksemaphore() is not implemented yet...!!");
+	//panic("signal_ksemaphore() is not implemented yet...!!");
 
 }
+
+
+
 
 
