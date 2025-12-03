@@ -26,42 +26,61 @@ void init_channel(struct Channel *chan, char *name)
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 // Ref: xv6-x86 OS code
+
+//===============================
+// 1) SLEEP ON A GIVEN CHANNEL:
+//===============================
+//===============================
+// 2) SLEEP ON A GIVEN CHANNEL:
+//===============================
+// ...existing code...
 void sleep(struct Channel *chan, struct kspinlock* lk)
 {
-	//TODO: [PROJECT'25.IM#5] KERNEL PROTECTION: #1 CHANNEL - sleep
-	//Your code is here
-	//Comment the following line
-	panic("sleep() is not implemented yet...!!");
+    struct Env *cur = get_cpu_proc();
+    if (cur == NULL)
+        panic("sleep: no current process");
+    
+    acquire_kspinlock(&(ProcessQueues.qlock));
+    cur->env_status = ENV_BLOCKED;
+    LIST_INSERT_TAIL(&(chan->queue), cur);
+    release_kspinlock(lk);  // Release the caller's lock first
+    sched();  // Called WHILE holding ProcessQueues.qlock
+    acquire_kspinlock(lk);
+    release_kspinlock(&(ProcessQueues.qlock));  // Release after wakeup
 }
 
-//==================================================
-// 3) WAKEUP ONE BLOCKED PROCESS ON A GIVEN CHANNEL:
-//==================================================
-// Wake up ONE process sleeping on chan.
-// The qlock must be held.
-// Ref: xv6-x86 OS code
-// chan MUST be of type "struct Env_Queue" to hold the blocked processes
 void wakeup_one(struct Channel *chan)
 {
-	//TODO: [PROJECT'25.IM#5] KERNEL PROTECTION: #2 CHANNEL - wakeup_one
-	//Your code is here
-	//Comment the following line
-	panic("wakeup_one() is not implemented yet...!!");
+    acquire_kspinlock(&(ProcessQueues.qlock));
+    struct Env *p = LIST_FIRST(&(chan->queue));
+    if (p != NULL)
+    {
+        LIST_REMOVE(&(chan->queue), p);
+        p->env_status = ENV_READY;
+        sched_insert_ready(p);
+    }
+    release_kspinlock(&(ProcessQueues.qlock));
 }
-
-//====================================================
-// 4) WAKEUP ALL BLOCKED PROCESSES ON A GIVEN CHANNEL:
-//====================================================
-// Wake up all processes sleeping on chan.
-// The queues lock must be held.
-// Ref: xv6-x86 OS code
-// chan MUST be of type "struct Env_Queue" to hold the blocked processes
 
 void wakeup_all(struct Channel *chan)
 {
-	//TODO: [PROJECT'25.IM#5] KERNEL PROTECTION: #3 CHANNEL - wakeup_all
-	//Your code is here
-	//Comment the following line
-	panic("wakeup_all() is not implemented yet...!!");
+    // Acquire lock to protect both queues
+    acquire_kspinlock(&(ProcessQueues.qlock));
+    
+    struct Env *p;
+    // Loop while there are processes in the channel queue
+    while ((p = LIST_FIRST(&(chan->queue))) != NULL)
+    {
+        // Remove process from channel queue
+        LIST_REMOVE(&(chan->queue), p);
+        
+        // Mark as ready for scheduling
+        p->env_status = ENV_READY;
+        
+        // Add to ready queue
+        sched_insert_ready(p);
+    }
+    
+    // Release lock after all processes woken
+    release_kspinlock(&(ProcessQueues.qlock));
 }
-
