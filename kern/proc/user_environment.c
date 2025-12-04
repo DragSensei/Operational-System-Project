@@ -497,17 +497,46 @@ void env_free(struct Env *e)
 	//TODO: [PROJECT'25.BONUS#4] EXIT #1 & #2 - env_free
 	//Your code is here
 	//Comment the following line
-	panic("env_free() is not implemented yet...!!");
+	// panic("env_free() is not implemented yet...!!");
 
 	// [1] [NOT REQUIRED] [If BUFFERING is Enabled] Un-buffer any BUFFERED page belong to this environment from the free/modified lists
 	// [2] Free the pages in the PAGE working set from the main memory
 	// struct WorkingSetElement *wse = LIST_FIRST(&e->page_WS_list);
 	// [3] free the PAGE working set itself from the main memory
+	struct WorkingSetElement *itr = NULL;
+	LIST_FOREACH_SAFE(itr, &(e->page_WS_list), WorkingSetElement)
+	{
+		uint32 element = itr->virtual_address;
+		env_page_ws_invalidate(e, element);
+	}
 	// [4] free the USER HEAP block allocator [if exists]
+	kfree((void*)e->kstack);
 	// [5] Free Shared variables [if any]
-	// [6] Free Semaphores [if any]
-	// [7] Free all TABLES from the main memory
+	// struct Share *itr = NULL
+	// LIST_FOREACH_SAFE(itr, &AllShares->shares_list, Share)
+	// // [7] Free all TABLES from the main memory
+	// {
+	// 		delete_shared_object(itr->ownerID, itr->ID);
+	// }
+	for (int i = 0; i < 1024; i++)
+	{
+		uint32 va = i << 22;
+		if (pd_is_table_used(e->env_page_directory, va))
+		{
+			uint32 *ptr_page_table = NULL;
+			get_page_table(e->env_page_directory, va, &ptr_page_table);
+			pd_set_table_unused(e, va);
+			pd_clear_page_dir_entry(e, va);
+
+			if (ptr_page_table != NULL)
+			{
+				kfree((void*) ptr_page_table);
+			}
+		}
+	}
+	kfree(e->prepagedVAs);
 	// [8] free the page DIRECTORY from the main memory
+	kfree((void*)e->env_page_directory);
 	// [9] remove this program from the page file
 	/*(ALREADY DONE for you)*/
 	pf_free_env(e); /*(ALREADY DONE for you)*/ // (removes all of the program pages from the page file)
@@ -939,16 +968,21 @@ void* create_user_kern_stack(uint32* ptr_user_page_directory) //youssef
 void delete_user_kern_stack(struct Env* e)
 {
 #if USE_KHEAP
-	//TODO: [PROJECT'25.BONUS#4] EXIT #1 & #2 - delete_user_kern_stack
-	// Write your code here, remove the panic and write your code
-	panic("delete_user_kern_stack() is not implemented yet...!!");
+    //TODO: [PROJECT'25.BONUS#4] EXIT #1 & #2 - delete_user_kern_stack
+    // Write your code here, remove the panic and write your code
+    //panic("delete_user_kern_stack() is not implemented yet...!!");
 
-	//Delete the allocated space for the user kernel stack of this process "e"
-	//remember to delete the bottom GUARD PAGE (i.e. not mapped)
-	//NEED TO FIND THE CORRECT PLACE TO CALL IT!
-	//(can't call it in env_free() since the stack is already in use during the function)
+    //Delete the allocated space for the user kernel stack of this process "e"
+    //remember to delete the bottom GUARD PAGE (i.e. not mapped)
+    //NEED TO FIND THE CORRECT PLACE TO CALL IT!
+    //(can't call it in env_free() since the stack is already in use during the function)
+    if (e->kstack != NULL)
+    {
+        kfree((void*)e->kstack);
+        e->kstack = NULL;
+    }
 #else
-	panic("KERNEL HEAP is OFF! user kernel stack can't be deleted");
+    panic("KERNEL HEAP is OFF! user kernel stack can't be deleted");
 #endif
 }
 
