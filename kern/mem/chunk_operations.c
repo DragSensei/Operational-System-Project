@@ -79,9 +79,47 @@ int share_chunk(uint32* page_directory, uint32 source_va,uint32 dest_va, uint32 
 //	Allocation should be aligned on page boundary. However, the given range may be not aligned.
 int allocate_chunk(uint32* page_directory, uint32 va, uint32 size, uint32 perms)
 {
-	//TODO: PRACTICE: fill this function.
-	//Comment the following line
-	panic("allocate_chunk() is not implemented yet...!!");
+	uint32 start = ROUNDDOWN(va, PAGE_SIZE);
+	uint32 end = ROUNDUP(va + size, PAGE_SIZE);
+
+	// 1. Check if any page in the range already exists
+	for (uint32 curr_va = start; curr_va < end; curr_va += PAGE_SIZE)
+	{
+		uint32 *ptr_page_table = NULL;
+		int ret = get_page_table(page_directory, curr_va, &ptr_page_table);
+
+		if (ret == TABLE_IN_MEMORY)
+		{
+			if (ptr_page_table[PTX(curr_va)] & PERM_PRESENT)
+			{
+				return -1;
+			}
+		}
+	}
+
+	// 2. Allocate or mark pages
+	for (uint32 curr_va = start; curr_va < end; curr_va += PAGE_SIZE)
+	{
+		uint32 *ptr_page_table = NULL;
+		int ret = get_page_table(page_directory, curr_va, &ptr_page_table);
+
+		if (ret == TABLE_NOT_EXIST)
+		{
+			ptr_page_table = create_page_table(page_directory, curr_va);
+		}
+
+		if (perms & PERM_PRESENT)
+		{
+			struct FrameInfo *ptr_frame_info;
+			allocate_frame(&ptr_frame_info);
+			map_frame(page_directory, ptr_frame_info, curr_va, perms);
+		}
+		else
+		{
+			ptr_page_table[PTX(curr_va)] = perms | PERM_UHPAGE;
+		}
+	}
+	return 0;
 }
 
 
@@ -201,9 +239,6 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 	// panic("free_user_mem() is not implemented yet...!!");
 }
 
-//=====================================
-// 4) FREE USER MEMORY (BUFFERING):
-//=====================================
 void __free_user_mem_with_buffering(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	// your code is here, remove the panic and write your code
