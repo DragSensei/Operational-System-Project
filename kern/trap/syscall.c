@@ -283,6 +283,11 @@ void sys_free_user_mem(uint32 virtual_address, uint32 size)
 	if (virtual_address == 0 || (virtual_address >= USER_HEAP_MAX) || (virtual_address < USER_HEAP_START)
 		|| (virtual_address + size >= USER_HEAP_MAX) || (virtual_address + size < USER_HEAP_START))
 	{
+		// cprintf("  VA: %x\n", virtual_address);
+		// cprintf("  Size: %x\n", size);
+		// cprintf("  End VA: %x\n", virtual_address + size);
+		// cprintf("  Heap Start: %x\n", USER_HEAP_START);
+		// cprintf("  Heap Max: %x\n", USER_HEAP_MAX);
 		cprintf("\nsys_free_user_mem(): ILLEGAL ADDRESS! Process will be terminated...\n");
 		env_exit();
 	}
@@ -306,6 +311,11 @@ void sys_allocate_user_mem(uint32 virtual_address, uint32 size)
 	if (virtual_address == 0 || (virtual_address >= USER_HEAP_MAX) || (virtual_address < USER_HEAP_START)
 		|| (virtual_address + size >= USER_HEAP_MAX) || (virtual_address + size < USER_HEAP_START))
 	{
+		// cprintf("  VA: %x\n", virtual_address);
+		// cprintf("  Size: %x\n", size);
+		// cprintf("  End VA: %x\n", virtual_address + size);
+		// cprintf("  Heap Start: %x\n", USER_HEAP_START);
+		// cprintf("  Heap Max: %x\n", USER_HEAP_MAX);
 		cprintf("\nsys_free_user_mem(): ILLEGAL ADDRESS! Process will be terminated...\n");
 		env_exit();
 	}
@@ -541,7 +551,10 @@ uint32 syscall(uint32 syscallno, uint32 a1, uint32 a2, uint32 a3, uint32 a4, uin
 	/*2023*/
 	//TODO: [PROJECT'25.IM#4] CPU SCHEDULING - #1 System Calls - Add suitable code here
 	//Your code is here
-
+	case SYS_env_set_priority:
+        env_set_priority(a1,a2);
+        return 0;
+	    break;
 	//=============================================
 	case SYS_allocate_user_mem:
 		sys_allocate_user_mem(a1, a2);

@@ -482,6 +482,7 @@ void env_start(void)
 //===============================
 // Frees environment "e" and all memory it uses.
 //
+
 void env_free(struct Env *e)
 {
 	/*REMOVE THIS LINE BEFORE START CODING*/
@@ -500,6 +501,7 @@ void env_free(struct Env *e)
 
 	// [1] [NOT REQUIRED] [If BUFFERING is Enabled] Un-buffer any BUFFERED page belong to this environment from the free/modified lists
 	// [2] Free the pages in the PAGE working set from the main memory
+	// struct WorkingSetElement *wse = LIST_FIRST(&e->page_WS_list);
 	// [3] free the PAGE working set itself from the main memory
 	struct WorkingSetElement *itr = NULL;
 	LIST_FOREACH_SAFE(itr, &(e->page_WS_list), WorkingSetElement)

@@ -8,6 +8,10 @@
 #include "../conc/kspinlock.h"
 #include <kern/conc/kspinlock.h>
 
+#define KHEAP_START_ADDR (KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE)
+#define MAX_KHEAP_PAGES ((KERNEL_HEAP_MAX - KHEAP_START_ADDR) / PAGE_SIZE)
+
+uint32 kheap_allocations[MAX_KHEAP_PAGES];
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
@@ -16,12 +20,12 @@ struct kspinlock kheap_lock;
 //==============================================
 // [1] INITIALIZE KERNEL HEAP:
 //==============================================
-//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #0 kheap_init [GIVEN]
-//Remember to initialize locks (if any)
+// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #0 kheap_init [GIVEN]
+// Remember to initialize locks (if any)
 void kheap_init()
 {
 	//==================================================================================
-	//DON'T CHANGE THESE LINES==========================================================
+	// DON'T CHANGE THESE LINES==========================================================
 	//==================================================================================
 	{
 		initialize_dynamic_allocator(KERNEL_HEAP_START, KERNEL_HEAP_START + DYN_ALLOC_MAX_SIZE);
@@ -37,7 +41,7 @@ void kheap_init()
 //==============================================
 // [2] GET A PAGE FROM THE KERNEL FOR DA:
 //==============================================
-int get_page(void* va)
+int get_page(void *va)
 {
 	int ret = alloc_page(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE), PERM_WRITEABLE, 1);
 	if (ret < 0)
@@ -48,7 +52,7 @@ int get_page(void* va)
 //==============================================
 // [3] RETURN A PAGE FROM THE DA TO KERNEL:
 //==============================================
-void return_page(void* va)
+void return_page(void *va)
 {
 	unmap_frame(ptr_page_directory, ROUNDDOWN((uint32)va, PAGE_SIZE));
 }
@@ -60,209 +64,257 @@ void return_page(void* va)
 // [1] ALLOCATE SPACE IN KERNEL HEAP:
 //===================================
 
+void kheap_mark_pages(uint32 start_va, uint32 size)
+{
+	uint32 start_idx = (start_va - KHEAP_START_ADDR) / PAGE_SIZE;
+	uint32 num_pages = size / PAGE_SIZE;
 
-int is_page_free(uint32 *pd, uint32 va) {
-	uint32 *pt = NULL;
-	struct FrameInfo *fi = get_frame_info(pd, va, &pt);
-	return (fi == NULL) ? 1 : 0; // Unmapped = free
+	kheap_allocations[start_idx] = size;
+
+	for (int i = 1; i < num_pages; i++)
+	{
+		kheap_allocations[start_idx + i] = 1;
+	}
 }
 
-// Global data 
-struct PageAlloc {
-	uint32 va;
-	uint32 size;
-	struct PageAlloc *next;
-};
-struct PageAlloc *page_alloc_list = NULL;
+void kheap_clear_pages(uint32 start_va, uint32 size)
+{
+	uint32 start_idx = (start_va - KHEAP_START_ADDR) / PAGE_SIZE;
+	uint32 num_pages = size / PAGE_SIZE;
 
+	for (int i = 0; i < num_pages; i++)
+	{
+		kheap_allocations[start_idx + i] = 0;
+	}
+}
 
-void* kmalloc(unsigned int size)
+// int is_page_free(uint32 *pd, uint32 va) {
+// 	uint32 *pt = NULL;
+// 	struct FrameInfo *fi = get_frame_info(pd, va, &pt);
+// 	return (fi == NULL) ? 1 : 0; // Unmapped = free
+// }
+
+// // Global data
+// struct PageAlloc {
+// 	uint32 va;
+// 	uint32 size;
+// 	struct PageAlloc *next;
+// };
+// struct PageAlloc *page_alloc_list = NULL;
+
+void *kmalloc(unsigned int size)
 {
 	acquire_kspinlock(&kheap_lock);
 
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #1 kmalloc
-	if (size == 0) {
-		release_kspinlock(&kheap_lock); 
-		return NULL; 
+	if (size == 0)
+	{
+		release_kspinlock(&kheap_lock);
+		return NULL;
 	}
-	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
-		void* block = alloc_block(size); // Small allocations via dynamic allocator
-		release_kspinlock(&kheap_lock); 
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE)
+	{
+		void *block = alloc_block(size); // Small allocations via dynamic allocator
+		release_kspinlock(&kheap_lock);
 		return block;
 	}
 	uint32 rounded_size = ROUNDUP(size, PAGE_SIZE);
-	if (rounded_size > KERNEL_HEAP_MAX - kheapPageAllocBreak) {
-		release_kspinlock(&kheap_lock); 
+	if (rounded_size > KERNEL_HEAP_MAX - kheapPageAllocBreak)
+	{
+		release_kspinlock(&kheap_lock);
 		return NULL; // bigger than the kernel space
 	}
+
 	uint32 needed_pages = rounded_size / PAGE_SIZE;
-	uint32 current_start = (uint32)-1, max_start = (uint32)-1;
-	uint32 current_sum = 0, max_contiguous = 0;
-	uint32 va = 0;
+
+	uint32 start_idx = (kheapPageAllocStart - KHEAP_START_ADDR) / PAGE_SIZE;
+	uint32 break_idx = (kheapPageAllocBreak - KHEAP_START_ADDR) / PAGE_SIZE;
+
+	uint32 current_hole_start_idx = -1;
+	uint32 current_hole_size = 0;
+
+	uint32 worst_fit_idx = -1;
+	uint32 worst_fit_size = 0;
+
+	uint32 found_va = 0;
+
+	for (uint32 i = start_idx; i < break_idx; i++)
+	{
+		if (kheap_allocations[i] == 0)
+		{
+			if (current_hole_size == 0)
+				current_hole_start_idx = i;
+			current_hole_size++;
+		}
+		else
+		{
+			if (current_hole_size > 0)
+			{
+				if (current_hole_size == needed_pages)
+				{
+					found_va = KHEAP_START_ADDR + (current_hole_start_idx * PAGE_SIZE);
+				}
+				if (current_hole_size > needed_pages)
+				{
+					if (current_hole_size > worst_fit_size)
+					{
+						worst_fit_size = current_hole_size;
+						worst_fit_idx = current_hole_start_idx;
+					}
+				}
+
+				current_hole_size = 0;
+				current_hole_start_idx = -1;
+			}
+		}
+	}
+
+	if (found_va == 0 && current_hole_size > 0)
+	{
+		if (current_hole_size == needed_pages)
+		{
+			found_va = KHEAP_START_ADDR + (current_hole_start_idx * PAGE_SIZE);
+		}
+		else if (current_hole_size > needed_pages)
+		{
+			if (current_hole_size > worst_fit_size)
+			{
+				worst_fit_size = current_hole_size;
+				worst_fit_idx = current_hole_start_idx;
+			}
+		}
+	}
+
+	if (found_va == 0)
+	{
+		if (worst_fit_idx != -1)
+		{
+			found_va = KHEAP_START_ADDR + (worst_fit_idx * PAGE_SIZE);
+		}
+		else
+		{
+			if (kheapPageAllocBreak + rounded_size > KERNEL_HEAP_MAX)
+			{
+				release_kspinlock(&kheap_lock);
+				return NULL;
+			}
+			found_va = kheapPageAllocBreak;
+			kheapPageAllocBreak += rounded_size;
+		}
+	}
+
 	uint32 *pd = ptr_page_directory;
-	// Scan for first exact or worstfit
-	for (uint32 i = kheapPageAllocStart; i < kheapPageAllocBreak; i += PAGE_SIZE) {
-		if (!is_page_free(pd, i)) {
-			// End of hole
-			if (current_sum == needed_pages) {
-				va = current_start;
-				break; 
-			}
-			if (current_sum >= needed_pages && current_sum > max_contiguous) {
-				max_contiguous = current_sum;
-				max_start = current_start;
-			}
-			// reset
-			current_start = (uint32)-1;
-			current_sum = 0;
-			continue;
-		}
-		// start of new hole
-		if (current_start == (uint32)-1) {
-			current_start = i;
-		}
-		current_sum++;
-	}
-	// Trailing hole check
-	if (current_sum > 0) {
-		if (current_sum == needed_pages) {
-			va = current_start;
-			// No break needed, end of loop
-		} else if (current_sum >= needed_pages && current_sum > max_contiguous) {
-			max_contiguous = current_sum;
-			max_start = current_start;
-		}
-	}
-	if (va == 0) {
-		if (max_contiguous >= needed_pages) {
-			va = max_start; // Worst fit hole
-		} else {
-			// Expand: append at break
-			uint32 new_break = kheapPageAllocBreak + rounded_size;
-			if (new_break > KERNEL_HEAP_MAX) {
-				release_kspinlock(&kheap_lock); // ADDED
-				return NULL; // Can't grow
-			}
-			va = kheapPageAllocBreak;
-			kheapPageAllocBreak = new_break;
-		}
-	}
-	// Map the range: alloc frames + wire VAs (rollback on fail)
-	for (uint32 j = 0; j < needed_pages; j++) {
-		uint32 cur_va = va + (j * PAGE_SIZE);
+
+	for (uint32 i = 0; i < needed_pages; i++)
+	{
+		uint32 va_to_map = found_va + (i * PAGE_SIZE);
 		struct FrameInfo *fi = NULL;
-		if (allocate_frame(&fi) != 0) { // E_NO_MEM?
-			// Rollback mapped pages
-			for (uint32 k = 0; k < j; k++) {
-				unmap_frame(pd, va + (k * PAGE_SIZE));
+
+		int ret = allocate_frame(&fi);
+		if (ret != 0)
+		{
+			for (uint32 k = 0; k < i; k++)
+			{
+				unmap_frame(pd, found_va + (k * PAGE_SIZE));
 			}
-			if (va == kheapPageAllocBreak - rounded_size) { 
+
+			if (found_va == kheapPageAllocBreak - rounded_size)
+			{
 				kheapPageAllocBreak -= rounded_size;
 			}
-			release_kspinlock(&kheap_lock); 
+			release_kspinlock(&kheap_lock);
 			return NULL;
 		}
-		if (map_frame(pd, fi, cur_va, PERM_PRESENT | PERM_WRITEABLE) != 0) { // Already mapped? Fail
-			free_frame(fi); // Back to list
-			// Rollback
-			for (uint32 k = 0; k < j; k++) {
-				unmap_frame(pd, va + (k * PAGE_SIZE));
+
+		ret = map_frame(pd, fi, va_to_map, PERM_WRITEABLE | PERM_PRESENT);
+		if (ret != 0)
+		{
+			free_frame(fi);
+			for (uint32 k = 0; k < i; k++)
+			{
+				unmap_frame(pd, found_va + (k * PAGE_SIZE));
 			}
-			if (va == kheapPageAllocBreak - rounded_size) { 
+
+			if (found_va == kheapPageAllocBreak - rounded_size)
+			{
 				kheapPageAllocBreak -= rounded_size;
 			}
-			release_kspinlock(&kheap_lock); 
+			release_kspinlock(&kheap_lock);
 			return NULL;
 		}
 	}
-	// 	metadata for page allocation
-	struct PageAlloc *new_alloc = alloc_block(sizeof(struct PageAlloc));
-	if (new_alloc == NULL) {
-		// Rollback the mapping (free frames and unmap)
-		for (uint32 k = 0; k < needed_pages; k++) {
-			// Assuming unmap_frame frees the frame - if not, add explicit free_frame here
-			unmap_frame(pd, va + (k * PAGE_SIZE));
-		}
-		if (va == kheapPageAllocBreak - rounded_size) {
-			kheapPageAllocBreak -= rounded_size;
-		}
-		release_kspinlock(&kheap_lock); 
-		return NULL;
-	}
-	new_alloc->va = va;
-	new_alloc->size = rounded_size;
-	new_alloc->next = page_alloc_list;
-	page_alloc_list = new_alloc;
-	// TODO: [PROJECT'25.BONUS#3] FAST PAGE ALLOCATOR
-	
+
+	kheap_mark_pages(found_va, rounded_size);
+
 	release_kspinlock(&kheap_lock);
-	return (void *)va;
+	return (void *)found_va;
 }
 //=================================
 // [2] FREE SPACE FROM KERNEL HEAP:
 //=================================
 
-void kfree(void* virtual_address) {
+void kfree(void *virtual_address)
+{
 	acquire_kspinlock(&kheap_lock);
 
-	if (virtual_address == NULL) {
-		release_kspinlock(&kheap_lock); 
+	if (virtual_address == NULL)
+	{
+		release_kspinlock(&kheap_lock);
 		return;
 	}
 	uint32 va = (uint32)virtual_address;
-	if (va >= KERNEL_HEAP_START && va < kheapPageAllocStart) {
-		free_block(virtual_address); 
-		release_kspinlock(&kheap_lock); 
+	if (va >= KERNEL_HEAP_START && va < kheapPageAllocStart)
+	{
+		free_block(virtual_address);
+		release_kspinlock(&kheap_lock);
 		return;
 	}
-	if (va < kheapPageAllocStart || va >= kheapPageAllocBreak) {
-		release_kspinlock(&kheap_lock); 
-		return; // Invalid
+	if (va < kheapPageAllocStart || va >= kheapPageAllocBreak || (va % PAGE_SIZE != 0))
+	{
+		release_kspinlock(&kheap_lock);
+		return;
 	}
 
-	// use global data
-	struct PageAlloc *prev = NULL, *curr = page_alloc_list;
-	uint32 size = 0;
-	while (curr) {
-		if (curr->va == va) {
-			size = curr->size;
-			if (prev) prev->next = curr->next;
-			else page_alloc_list = curr->next;
-			free_block(curr); 
-			break;
+	uint32 idx = (va - KHEAP_START_ADDR) / PAGE_SIZE;
+	uint32 size = kheap_allocations[idx];
+
+	if (size <= 1)
+	{
+		release_kspinlock(&kheap_lock);
+		return;
+	}
+
+	uint32 num_pages = size / PAGE_SIZE;
+	for (uint32 i = 0; i < num_pages; i++)
+	{
+		unmap_frame(ptr_page_directory, va + (i * PAGE_SIZE));
+	}
+
+	kheap_clear_pages(va, size);
+
+	uint32 current_break_idx = (kheapPageAllocBreak - KHEAP_START_ADDR) / PAGE_SIZE;
+	uint32 start_alloc_idx = (kheapPageAllocStart - KHEAP_START_ADDR) / PAGE_SIZE;
+
+	uint32 free_count = 0;
+	if (current_break_idx > start_alloc_idx)
+	{
+		uint32 i = current_break_idx - 1;
+		while (i >= start_alloc_idx && kheap_allocations[i] == 0)
+		{
+			free_count++;
+			if (i == 0)
+				break;
+			i--;
 		}
-		prev = curr;
-		curr = curr->next;
-	}
-	if (size == 0) {
-		release_kspinlock(&kheap_lock); 
-		return; 
 	}
 
-	// Unmap
-	uint32 needed_pages = size / PAGE_SIZE;
-	uint32 *pd = ptr_page_directory;
-	for (uint32 j = 0; j < needed_pages; j++) {
-		uint32 cur_va = va + (j * PAGE_SIZE);
-		unmap_frame(pd, cur_va);
-	}
-	
-
-	uint32 trim_count = 0;
-	uint32 check_va = kheapPageAllocBreak - PAGE_SIZE;
-	while (check_va >= kheapPageAllocStart && check_va < kheapPageAllocBreak && 
-			is_page_free(pd, check_va)) {
-		trim_count++;
-		if (check_va < PAGE_SIZE) break; 
-		check_va -= PAGE_SIZE;
-	}
-	if (trim_count > 0) {
-		kheapPageAllocBreak -= (trim_count * PAGE_SIZE);
+	if (free_count > 0)
+	{
+		kheapPageAllocBreak -= (free_count * PAGE_SIZE);
 	}
 
 	release_kspinlock(&kheap_lock);
 }
-
 
 //=================================
 // [3] FIND VA OF GIVEN PA:
@@ -271,28 +323,28 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 {
 	acquire_kspinlock(&kheap_lock);
 
-	//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #3 kheap_virtual_address
-	//Your code is here
-	if(physical_address == 0)
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #3 kheap_virtual_address
+	// Your code is here
+	if (physical_address == 0)
 	{
-		release_kspinlock(&kheap_lock); 
+		release_kspinlock(&kheap_lock);
 		return 0;
 	}
 
 	uint32 offset = physical_address & 0xFFF;
 	struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
 
-	if(ptr_frame_info == NULL || ptr_frame_info->va == 0)
+	if (ptr_frame_info == NULL || ptr_frame_info->va == 0)
 	{
-		release_kspinlock(&kheap_lock); 
+		release_kspinlock(&kheap_lock);
 		return 0;
 	}
 
 	uint32 va = ptr_frame_info->va + offset;
-	release_kspinlock(&kheap_lock); 
+	release_kspinlock(&kheap_lock);
 	return va;
-	//Comment the following line
-	// panic("kheap_virtual_address() is not implemented yet...!!");
+	// Comment the following line
+	//  panic("kheap_virtual_address() is not implemented yet...!!");
 
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
@@ -304,38 +356,38 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 {
 	acquire_kspinlock(&kheap_lock);
 
-	//TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
-	//Your code is here
-	if(virtual_address < KERNEL_HEAP_START ||virtual_address >= KERNEL_HEAP_MAX)
-		{
-			release_kspinlock(&kheap_lock); 
-			return 0;
-		}
+	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
+	// Your code is here
+	if (virtual_address < KERNEL_HEAP_START || virtual_address >= KERNEL_HEAP_MAX)
+	{
+		release_kspinlock(&kheap_lock);
+		return 0;
+	}
 
 	uint32 *ptr_page_table = NULL;
 	get_page_table(ptr_page_directory, virtual_address, &ptr_page_table);
 
-	if(ptr_page_table == NULL)
+	if (ptr_page_table == NULL)
 	{
-		release_kspinlock(&kheap_lock); 
+		release_kspinlock(&kheap_lock);
 		return 0;
 	}
 
 	uint32 pte = ptr_page_table[PTX(virtual_address)];
-	if(pte == 0)
+	if (pte == 0)
 	{
-		release_kspinlock(&kheap_lock); 
+		release_kspinlock(&kheap_lock);
 		return 0;
 	}
 
-	uint32 page_offset 	= virtual_address & 0xFFF;
+	uint32 page_offset = virtual_address & 0xFFF;
 	uint32 frame_number = pte & 0xFFFFF000;
-	
+
 	uint32 pa = frame_number | page_offset;
-	release_kspinlock(&kheap_lock); 
+	release_kspinlock(&kheap_lock);
 	return pa;
-	//Comment the following line
-	// panic("kheap_physical_address() is not implemented yet...!!");
+	// Comment the following line
+	//  panic("kheap_physical_address() is not implemented yet...!!");
 
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
@@ -344,13 +396,228 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 //============================== BONUS FUNCTION ===================================//
 //=================================================================================//
 
-
 extern __inline__ uint32 get_block_size(void *va);
 
-void *krealloc(void *virtual_address, uint32 new_size)
+typedef struct CUSTOM_FIT_VARIABLES 
 {
-	//TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - krealloc
-	//Your code is here
-	//Comment the following line
-	panic("krealloc() is not implemented yet...!!");
+	uint32 start_idx;
+	uint32 break_idx;
+
+	uint32 current_hole_start_idx;
+	uint32 current_hole_size;
+
+	uint32 worst_fit_idx;
+	uint32 worst_fit_size;
+
+	uint32 found_va;
+	uint32 va_idx; 	
+};
+
+void *krealloc(void *virtual_address, uint32 new_size)
+
+{
+	// //TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - krealloc
+	// //Your code is here
+	// /*
+	// 	Notes:
+	// 		1. If we recieve va = NULL, call kmalloc
+	// 		2. If we recieve size = 0, call kfree
+	// 		3. if the size is smaller than the one we have allocated, we free the rest.
+	// 		4. if its bigger, we try to expand the virtual address, if we cant we move the info and free the old va
+	// 		5. return null if failed
+	// 		6. return va if success
+	// */
+	acquire_kspinlock(&kheap_lock);
+
+	if (virtual_address == NULL)
+	{
+		release_kspinlock(&kheap_lock);
+		void* va = kmalloc(new_size);
+		return va;
+	}
+	else if (new_size == 0)
+	{
+		release_kspinlock(&kheap_lock);
+		kfree(virtual_address);
+		return NULL;
+	}
+	else if (new_size <= DYN_ALLOC_MAX_BLOCK_SIZE)
+	{
+		if (virtual_address >= KHEAP_START_ADDR)
+		{
+			uint32 va_idx = ((uint32) virtual_address - KHEAP_START_ADDR) / PAGE_SIZE;
+			uint32 old_size = kheap_allocations[va_idx];
+
+			uint32 va = alloc_block(new_size);
+			if (va == NULL)
+			{
+				release_kspinlock(&kheap_lock);
+				return NULL;
+			}
+
+			uint32 copy_size = (old_size < new_size) ? old_size : new_size;
+			memcpy(va, virtual_address, copy_size);
+			release_kspinlock(&kheap_lock);
+			kfree(virtual_address);
+
+			return va;
+		}
+		uint32 old_size = get_block_size(virtual_address);
+		uint32 va = alloc_block(new_size);
+
+		if (va == NULL)
+		{
+			release_kspinlock(&kheap_lock);
+			return NULL;
+		}
+
+		uint32 copy_size = (old_size < new_size) ? old_size : new_size;
+		memcpy(va, virtual_address, copy_size);
+		free_block(virtual_address);
+
+		release_kspinlock(&kheap_lock);
+		return va;
+	}
+	else if ((uint32) virtual_address >= KERNEL_HEAP_START && (uint32) virtual_address < KHEAP_START_ADDR)
+	{
+		uint32 old_size = get_block_size(virtual_address);
+		release_kspinlock(&kheap_lock);
+		void* va = kmalloc(new_size);
+		acquire_kspinlock(&kheap_lock);
+
+		if (va == NULL)
+			return NULL;
+
+		memcpy(va, virtual_address, old_size);
+		free_block(virtual_address);
+		release_kspinlock(&kheap_lock);
+		
+		return va;
+	}
+
+	struct CUSTOM_FIT_VARIABLES var;
+
+	var.start_idx = (kheapPageAllocStart - KHEAP_START_ADDR) / PAGE_SIZE;
+	var.break_idx = (kheapPageAllocBreak - KHEAP_START_ADDR) / PAGE_SIZE;
+	var.current_hole_start_idx = -1;
+	var.current_hole_size = 0;
+	var.worst_fit_idx = -1;
+	var.worst_fit_size = 0;
+	var.found_va = 0;
+	var.va_idx = ((uint32)virtual_address  - KHEAP_START_ADDR) / PAGE_SIZE;
+
+	uint32 rounded_size = ROUNDUP(new_size, PAGE_SIZE);
+	uint32 needed_pages =rounded_size / PAGE_SIZE;
+
+
+	if (new_size <= kheap_allocations[var.va_idx])
+	{
+		uint32 el_7agm_eladeem = kheap_allocations[var.va_idx];
+		uint32 el_m7tagen_nshylhom = el_7agm_eladeem - rounded_size;
+
+		kheap_allocations[var.va_idx] = rounded_size;
+
+		if (el_m7tagen_nshylhom > 0)
+		{
+			uint32 tmp_va = (uint32) virtual_address + rounded_size;
+			uint32 tmp_idx = var.va_idx + rounded_size / PAGE_SIZE;
+			kheap_allocations[tmp_idx] = el_m7tagen_nshylhom;
+
+			release_kspinlock(&kheap_lock);
+			kfree((uint32) tmp_va);
+			return virtual_address;
+		}
+
+		release_kspinlock(&kheap_lock);
+		return virtual_address;
+	}
+	else 
+	{
+		if (kheap_allocations[var.va_idx + kheap_allocations[var.va_idx] / PAGE_SIZE] == 0)
+		{
+			uint32 old_pages = kheap_allocations[var.va_idx] / PAGE_SIZE;
+			uint32 new_pages = rounded_size / PAGE_SIZE;
+			uint32 tmp_idx = var.va_idx + kheap_allocations[var.va_idx] / PAGE_SIZE;
+			uint32 counter = 0;
+
+			while (kheap_allocations[tmp_idx] == 0 && tmp_idx < (kheapPageAllocBreak - KHEAP_START_ADDR) / PAGE_SIZE)
+			{
+				counter++;
+				tmp_idx++;
+			}
+
+			if (counter >= new_pages - old_pages)
+			{
+				kheap_allocations[var.va_idx] = rounded_size;
+				for (int i = old_pages; i < new_pages; i++)
+				{
+					uint32 va_to_map = virtual_address + (i * PAGE_SIZE);
+					struct FrameInfo *fi = NULL;
+
+					int ret = allocate_frame(&fi);
+					if (ret != 0)
+					{
+						for (uint32 k = old_pages; k < i; k++)
+						{
+							unmap_frame(ptr_page_directory, virtual_address + (k * PAGE_SIZE));
+						}
+
+						if (virtual_address == kheapPageAllocBreak - rounded_size)
+						{
+							kheapPageAllocBreak -= rounded_size;
+						}
+						release_kspinlock(&kheap_lock);
+						return NULL;
+					}
+
+					ret = map_frame(ptr_page_directory, fi, va_to_map, PERM_WRITEABLE | PERM_PRESENT);
+					if (ret != 0)
+					{
+						free_frame(fi);
+						for (uint32 k = old_pages; k < i; k++)
+						{
+							unmap_frame(ptr_page_directory, virtual_address + (k * PAGE_SIZE));
+						}
+
+						if (virtual_address == kheapPageAllocBreak - rounded_size)
+						{
+							kheapPageAllocBreak -= rounded_size;
+						}
+						release_kspinlock(&kheap_lock);
+						return NULL;
+					}
+
+					kheap_allocations[var.va_idx + i] = 1;
+				}
+
+				release_kspinlock(&kheap_lock);
+				return virtual_address;
+			}
+			else
+			{
+				uint32 old_size = kheap_allocations[var.va_idx];
+				release_kspinlock(&kheap_lock);
+				void* va = kmalloc(rounded_size);
+				if (va == NULL) return NULL;
+				uint32 copy_len = (old_size < rounded_size) ? old_size : rounded_size;
+				memcpy(va, virtual_address, copy_len);
+				kfree(virtual_address);
+				return va; 
+			}
+		}
+	}
+
+	uint32 old_size = kheap_allocations[var.va_idx];
+	release_kspinlock(&kheap_lock);
+	void* va = kmalloc(new_size);
+	if (va == NULL)
+		return NULL;
+
+	memcpy(va, virtual_address, old_size);
+	kfree(virtual_address);
+
+	return va;
+
+	// Comment the following line
+	// panic("krealloc() is not implemented yet...!!");
 }

@@ -92,7 +92,8 @@ int log2(int number) {
     if (number <= 1) return 0;
     uint32 a = 0;
     number--;
-    while (number > 0) {
+    while (number > 0) 
+	{
         number >>= 1;
         a++;
     }
@@ -110,7 +111,8 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 	int index = log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE)) - LOG2_MIN_SIZE;
 	int blockSize = 1 << log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE));
 	
-	if (!LIST_EMPTY(&freeBlockLists[index])) {
+	if (!LIST_EMPTY(&freeBlockLists[index])) 
+	{
 		struct BlockElement* ptrBlock = LIST_FIRST(&freeBlockLists[index]);
 		LIST_REMOVE(&freeBlockLists[index], ptrBlock);
 
@@ -118,7 +120,8 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 		pageBlockInfoArr[tmp].num_of_free_blocks--;
 		return ptrBlock;
 	}
-	else if (!LIST_EMPTY(&freePagesList)) {
+	else if (!LIST_EMPTY(&freePagesList)) 
+	{
 		struct PageInfoElement* ptrPage = LIST_FIRST(&freePagesList);
 		LIST_REMOVE(&freePagesList, ptrPage);
 
@@ -128,7 +131,8 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 		ptrPage->num_of_free_blocks =(PAGE_SIZE / blockSize) - 1;
 		
 		uint32 pageAddress = to_page_va(ptrPage);
-		for (int i = 1; i < (PAGE_SIZE / blockSize); i++) {
+		for (int i = 1; i < (PAGE_SIZE / blockSize); i++) 
+		{
 			struct BlockElement* ptrBlock =  
 				(struct BlockElement*)(pageAddress + (i* blockSize));
 			LIST_INSERT_TAIL(&freeBlockLists[index], ptrBlock);
@@ -138,7 +142,9 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 	}
 
 
-	while (LIST_EMPTY(&freeBlockLists[index]) && index <= (LOG2_MAX_SIZE - LOG2_MIN_SIZE)) {
+	while (index <= (LOG2_MAX_SIZE - LOG2_MIN_SIZE)) 
+	{
+		if (!LIST_EMPTY(&freeBlockLists[index])) break;
 		index++;
 	}
 	if (index > (LOG2_MAX_SIZE - LOG2_MIN_SIZE))
@@ -216,14 +222,14 @@ void *realloc_block(void* va, uint32 new_size)
 		return NULL;
 	}
 
-	void* newwVA = alloc_block(new_size);
-	char* el_asl = (char*)va;
-	char* el_wegha = (char*)newwVA;
-	int pastSZ = get_block_size(va);
-	for (int i = 0; i < pastSZ; i++)
-		el_wegha[i] = el_asl[i];
-	free_block(va);
-	return newwVA;
+	if (new_size > DYN_ALLOC_MAX_BLOCK_SIZE)
+		panic("Too big for DYNAMIC ALLOCATOR");
+	
+	uint32 new_va;
+	//Condition if the size we can allocate, we allocate and free the old address
+	//and the old data in the old block, we transfer to the new block.
+	// if we cant allocate, we dont free.
+
 	//Comment the following line
 	//panic("realloc_block() Not implemented yet");
 }

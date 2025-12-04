@@ -68,6 +68,10 @@ GDBPORT 	= 26000
 QEMUGDB 	= -gdb tcp::$(GDBPORT)
 QEMUOPTS 	= -drive file=$(IMAGE),media=disk,format=raw -smp 2 -m 256 $(QEMUEXTRAS)
 
+
+qemu-slow: all
+    $(V)$(QEMU) -accel tcg -icount shift=4,sleep=on -parallel mon:stdio $(QEMUOPTS)
+
 qemu: all
 	$(V)$(QEMU) -parallel mon:stdio $(QEMUOPTS)
 

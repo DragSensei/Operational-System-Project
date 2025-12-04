@@ -100,7 +100,9 @@ bool freeSpaceInPageAlloc(int index, bool isDataWritten)
 	//Check allocation in RAM & Page File
 	if ((usedDiskPages - sys_pf_calculate_allocated_pages()) != 0)
 	{ correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"1 Wrong free in alloc#%d: Extra or less pages are removed from PageFile\n", index);}
-	if ((sys_calculate_free_frames() - freeFrames) != expectedNumOfFrames)
+
+	int actualNumOfFrames = (sys_calculate_free_frames() - freeFrames) ;
+	if (!inRange(actualNumOfFrames, expectedNumOfFrames, expectedNumOfFrames + 2 /*max of: 1 page for KERN Block Alloc (WSelement) + 1 page for USER block alloc (private DS) */))
 	{ correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"2 Wrong free in alloc#%d: WS pages in memory and/or page tables are not freed correctly\n", index);}
 
 	if (isDataWritten)
