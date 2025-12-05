@@ -623,10 +623,14 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				// [1] Initialize clock pointer
 				struct WorkingSetElement *clock_ptr = faulted_env->page_last_WS_element;
 				if (clock_ptr == NULL)
+				{
 					clock_ptr = LIST_FIRST(&(faulted_env->page_WS_list));
+				}
 
 				if (clock_ptr == NULL)
+				{
 					panic("Empty WS on replacement");
+				}
 
 				// [2] Find victim
 				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
