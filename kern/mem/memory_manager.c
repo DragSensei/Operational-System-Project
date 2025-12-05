@@ -26,14 +26,11 @@ FUNCTIONS:	to_physical_address, get_frame_info, tlb_invalidate
 #include <kern/disk/pagefile_manager.h>
 #include "kheap.h"
 
-
-
-
 void tlb_invalidate(uint32 *ptr_page_directory, void *virtual_address)
 {
 	// Flush the entry only if we're modifying the current address space.
-	/*2025*/ //check is added
-	struct Env* e = get_cpu_proc();
+	/*2025*/ // check is added
+	struct Env *e = get_cpu_proc();
 	if (!e || e->env_page_directory == ptr_page_directory)
 		invlpg(virtual_address);
 }
@@ -72,49 +69,49 @@ void initialize_paging()
 	LIST_INIT(&MemFrameLists.free_frame_list);
 	LIST_INIT(&MemFrameLists.modified_frame_list);
 
-	//Initialize the corresponding lock
+	// Initialize the corresponding lock
 	init_kspinlock(&MemFrameLists.mfllock, "Frame Info Lock");
 
 	frames_info[0].references = 1;
 	frames_info[1].references = 1;
 	frames_info[2].references = 1;
-	ptr_zero_page = (uint8*) KERNEL_BASE+PAGE_SIZE;
-	ptr_temp_page = (uint8*) KERNEL_BASE+2*PAGE_SIZE;
-	i =0;
-	for(;i<1024; i++)
+	ptr_zero_page = (uint8 *)KERNEL_BASE + PAGE_SIZE;
+	ptr_temp_page = (uint8 *)KERNEL_BASE + 2 * PAGE_SIZE;
+	i = 0;
+	for (; i < 1024; i++)
 	{
-		ptr_zero_page[i]=0;
-		ptr_temp_page[i]=0;
+		ptr_zero_page[i] = 0;
+		ptr_temp_page[i] = 0;
 	}
 
-	int range_end = ROUNDUP(PHYS_IO_MEM,PAGE_SIZE);
+	int range_end = ROUNDUP(PHYS_IO_MEM, PAGE_SIZE);
 
-	for (i = 3; i < range_end/PAGE_SIZE; i++)
+	for (i = 3; i < range_end / PAGE_SIZE; i++)
 	{
 
 		initialize_frame_info(&(frames_info[i]));
-		//frames_info[i].references = 0;
+		// frames_info[i].references = 0;
 
 		LIST_INSERT_HEAD(&MemFrameLists.free_frame_list, &frames_info[i]);
 	}
 
-	for (i = PHYS_IO_MEM/PAGE_SIZE ; i < PHYS_EXTENDED_MEM/PAGE_SIZE; i++)
+	for (i = PHYS_IO_MEM / PAGE_SIZE; i < PHYS_EXTENDED_MEM / PAGE_SIZE; i++)
 	{
 		frames_info[i].references = 1;
 	}
 
 	range_end = ROUNDUP(STATIC_KERNEL_PHYSICAL_ADDRESS(ptr_free_mem), PAGE_SIZE);
 
-	for (i = PHYS_EXTENDED_MEM/PAGE_SIZE ; i < range_end/PAGE_SIZE; i++)
+	for (i = PHYS_EXTENDED_MEM / PAGE_SIZE; i < range_end / PAGE_SIZE; i++)
 	{
 		frames_info[i].references = 1;
 	}
 
-	for (i = range_end/PAGE_SIZE ; i < number_of_frames; i++)
+	for (i = range_end / PAGE_SIZE; i < number_of_frames; i++)
 	{
 		initialize_frame_info(&(frames_info[i]));
 
-		//frames_info[i].references = 0;
+		// frames_info[i].references = 0;
 		LIST_INSERT_HEAD(&MemFrameLists.free_frame_list, &frames_info[i]);
 	}
 
@@ -162,27 +159,27 @@ int allocate_frame(struct FrameInfo **ptr_frame_info)
 		panic("ERROR: Kernel run out of memory... allocate_frame cannot find a free frame.\n");
 	}
 
-	LIST_REMOVE(&MemFrameLists.free_frame_list,*ptr_frame_info);
+	LIST_REMOVE(&MemFrameLists.free_frame_list, *ptr_frame_info);
 
 	/******************* PAGE BUFFERING CODE *******************
 	 ***********************************************************/
 
-	if((*ptr_frame_info)->isBuffered)
+	if ((*ptr_frame_info)->isBuffered)
 	{
 		/*MUST UN-COMMENT THIS LINE*/
-		//pt_clear_page_table_entry((*ptr_frame_info)->proc->env_page_directory,(*ptr_frame_info)->va);
+		// pt_clear_page_table_entry((*ptr_frame_info)->proc->env_page_directory,(*ptr_frame_info)->va);
 	}
 
 	/**********************************************************
 	 ***********************************************************/
 
 	initialize_frame_info(*ptr_frame_info);
-    (*ptr_frame_info)->va = 0;
+	(*ptr_frame_info)->virtual_address = 0;
 	if (!lock_already_held)
 	{
 		release_kspinlock(&MemFrameLists.mfllock);
 	}
-    
+
 	return 0;
 }
 
@@ -204,7 +201,7 @@ void free_frame(struct FrameInfo *ptr_frame_info)
 		/*=============================================================================*/
 		// Fill this function in
 		LIST_INSERT_HEAD(&MemFrameLists.free_frame_list, ptr_frame_info);
-		//LOG_STATMENT(cprintf("FN # %d FREED",to_frame_number(ptr_frame_info)));
+		// LOG_STATMENT(cprintf("FN # %d FREED",to_frame_number(ptr_frame_info)));
 	}
 	if (!lock_already_held)
 	{
@@ -216,7 +213,7 @@ void free_frame(struct FrameInfo *ptr_frame_info)
 // Decrement the reference count on a frame
 // freeing it if there are no more references.
 //
-void decrement_references(struct FrameInfo* ptr_frame_info)
+void decrement_references(struct FrameInfo *ptr_frame_info)
 {
 	if (--(ptr_frame_info->references) == 0)
 		free_frame(ptr_frame_info);
@@ -236,27 +233,27 @@ int get_page_table(uint32 *ptr_page_directory, const uint32 virtual_address, uin
 	//	cprintf("gpt .05\n");
 	uint32 page_directory_entry = ptr_page_directory[PDX(virtual_address)];
 
-	//2022: check PERM_PRESENT of the table first before calculating its PA
-	if ( (page_directory_entry & PERM_PRESENT) == PERM_PRESENT)
+	// 2022: check PERM_PRESENT of the table first before calculating its PA
+	if ((page_directory_entry & PERM_PRESENT) == PERM_PRESENT)
 	{
 		//	cprintf("gpt .07, page_directory_entry= %x \n",page_directory_entry);
-		if(USE_KHEAP && !CHECK_IF_KERNEL_ADDRESS(virtual_address))
+		if (USE_KHEAP && !CHECK_IF_KERNEL_ADDRESS(virtual_address))
 		{
-			*ptr_page_table = (void *)kheap_virtual_address(EXTRACT_ADDRESS(page_directory_entry)) ;
-			//cprintf("===>get_page_table: page_dir_entry = %x ptr_page_table = %x\n", page_directory_entry,*ptr_page_table);
+			*ptr_page_table = (void *)kheap_virtual_address(EXTRACT_ADDRESS(page_directory_entry));
+			// cprintf("===>get_page_table: page_dir_entry = %x ptr_page_table = %x\n", page_directory_entry,*ptr_page_table);
 		}
 		else
 		{
-			*ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(page_directory_entry)) ;
+			*ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(page_directory_entry));
 		}
 		return TABLE_IN_MEMORY;
 	}
-	else if (page_directory_entry != 0) //the table exists but not in main mem, so it must be in sec mem
+	else if (page_directory_entry != 0) // the table exists but not in main mem, so it must be in sec mem
 	{
 		// Put the faulted address in CR2 and then
 		// Call the fault_handler() to load the table in memory for us ...
 		//		cprintf("gpt .1\n, %x page_directory_entry\n", page_directory_entry);
-		lcr2((uint32)virtual_address) ;
+		lcr2((uint32)virtual_address);
 
 		//		cprintf("gpt .12\n");
 		fault_handler(NULL);
@@ -265,13 +262,13 @@ int get_page_table(uint32 *ptr_page_directory, const uint32 virtual_address, uin
 		// now the page_fault_handler() should have returned successfully and updated the
 		// directory with the new table frame number in memory
 		page_directory_entry = ptr_page_directory[PDX(virtual_address)];
-		if(USE_KHEAP && !CHECK_IF_KERNEL_ADDRESS(virtual_address))
+		if (USE_KHEAP && !CHECK_IF_KERNEL_ADDRESS(virtual_address))
 		{
-			*ptr_page_table = (void *)kheap_virtual_address(EXTRACT_ADDRESS(page_directory_entry)) ;
+			*ptr_page_table = (void *)kheap_virtual_address(EXTRACT_ADDRESS(page_directory_entry));
 		}
 		else
 		{
-			*ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(page_directory_entry)) ;
+			*ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(page_directory_entry));
 		}
 
 		return TABLE_IN_MEMORY;
@@ -284,57 +281,56 @@ int get_page_table(uint32 *ptr_page_directory, const uint32 virtual_address, uin
 	}
 }
 
-void * create_page_table(uint32 *ptr_directory, const uint32 virtual_address)
+void *create_page_table(uint32 *ptr_directory, const uint32 virtual_address)
 {
 	//[Kernel Dynamic Allocation] create_page_table()
 	// Write your code here, remove the panic and write your code
-	//panic("create_page_table() is not implemented yet...!!");
+	// panic("create_page_table() is not implemented yet...!!");
 
-	//Use kmalloc() to create a new page TABLE for the given virtual address,
-	//link it to the given directory and return the address of the created table
-	//REMEMBER TO:
+	// Use kmalloc() to create a new page TABLE for the given virtual address,
+	// link it to the given directory and return the address of the created table
+	// REMEMBER TO:
 	//	a.	clear all entries (as it may contain garbage data)
 	//	b.	clear the TLB cache (using "tlbflush()")
 
-	//change this "return" according to your answer
+	// change this "return" according to your answer
 
 #if USE_KHEAP
-	uint32 * ptr_page_table = kmalloc(PAGE_SIZE);
-	//cprintf("new table is created==================\n");
-	if(ptr_page_table == NULL)
+	uint32 *ptr_page_table = kmalloc(PAGE_SIZE);
+	// cprintf("new table is created==================\n");
+	if (ptr_page_table == NULL)
 	{
 		panic("NOT ENOUGH KERNEL HEAP SPACE");
 	}
-	//cprintf("Table is created for va %x\n", virtual_address);
+	// cprintf("Table is created for va %x\n", virtual_address);
 	ptr_directory[PDX(virtual_address)] = CONSTRUCT_ENTRY(
-			kheap_physical_address((unsigned int)ptr_page_table)
-			, PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
+		kheap_physical_address((unsigned int)ptr_page_table), PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
 
 	//================
-	memset(ptr_page_table , 0, PAGE_SIZE);
+	memset(ptr_page_table, 0, PAGE_SIZE);
 	tlbflush();
 
 #else
-	uint32 * ptr_page_table ;
-	__static_cpt(ptr_directory, virtual_address, &ptr_page_table) ;
+	uint32 *ptr_page_table;
+	__static_cpt(ptr_directory, virtual_address, &ptr_page_table);
 #endif
 
-	//cprintf("KERNEL: NEW TABLE for va %x \n", virtual_address);
+	// cprintf("KERNEL: NEW TABLE for va %x \n", virtual_address);
 
 	return ptr_page_table;
 }
 
 void __static_cpt(uint32 *ptr_directory, const uint32 virtual_address, uint32 **ptr_page_table)
 {
-	struct FrameInfo* ptr_new_frame_info;
-	int err = allocate_frame(&ptr_new_frame_info) ;
+	struct FrameInfo *ptr_new_frame_info;
+	int err = allocate_frame(&ptr_new_frame_info);
 
 	uint32 phys_page_table = to_physical_address(ptr_new_frame_info);
-	*ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(phys_page_table) ;
+	*ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(phys_page_table);
 	ptr_new_frame_info->references = 1;
 	ptr_directory[PDX(virtual_address)] = CONSTRUCT_ENTRY(phys_page_table, PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
-	//initialize new page table by 0's
-	memset(*ptr_page_table , 0, PAGE_SIZE);
+	// initialize new page table by 0's
+	memset(*ptr_page_table, 0, PAGE_SIZE);
 	tlbflush();
 }
 //
@@ -355,12 +351,12 @@ void __static_cpt(uint32 *ptr_directory, const uint32 virtual_address, uint32 **
 //
 int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint32 virtual_address, int perm)
 {
-	ptr_frame_info->va = ROUNDDOWN(virtual_address, PAGE_SIZE);
+	ptr_frame_info->virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	// Fill this function in
-	ptr_frame_info->va = ROUNDDOWN(virtual_address, PAGE_SIZE);
+	ptr_frame_info->virtual_address = ROUNDDOWN(virtual_address, PAGE_SIZE);
 	uint32 physical_address = to_physical_address(ptr_frame_info);
 	uint32 *ptr_page_table;
-	if( get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) == TABLE_NOT_EXIST)
+	if (get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) == TABLE_NOT_EXIST)
 	{
 		/*==========================================================================================
 		// OLD WRONG SOLUTION
@@ -380,19 +376,18 @@ int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint
 #if USE_KHEAP
 		{
 			ptr_page_table = create_page_table(ptr_page_directory, (uint32)virtual_address);
-			//cprintf("======>page table created using kheap for VA %x at dir = %x PT = %x\n", virtual_address, ptr_page_directory[PDX(virtual_address)], ptr_page_table);
-			uint32* ptr_page_table2 =NULL;
-			//cprintf("======> After the table created at %x\n\n", get_page_table(ptr_page_directory, virtual_address,&ptr_page_table2));
+			// cprintf("======>page table created using kheap for VA %x at dir = %x PT = %x\n", virtual_address, ptr_page_directory[PDX(virtual_address)], ptr_page_table);
+			uint32 *ptr_page_table2 = NULL;
+			// cprintf("======> After the table created at %x\n\n", get_page_table(ptr_page_directory, virtual_address,&ptr_page_table2));
 		}
 #else
 		{
 			__static_cpt(ptr_page_directory, (uint32)virtual_address, &ptr_page_table);
 		}
 #endif
-
 	}
 
-	//cprintf("NOW .. map add = %x ptr_page_table = %x PTX(virtual_address) = %d\n", virtual_address, ptr_page_table,PTX(virtual_address));
+	// cprintf("NOW .. map add = %x ptr_page_table = %x PTX(virtual_address) = %d\n", virtual_address, ptr_page_table,PTX(virtual_address));
 	uint32 page_table_entry = ptr_page_table[PTX(virtual_address)];
 
 	/*OLD WRONG SOLUTION
@@ -408,15 +403,15 @@ int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint
 	}*/
 
 	/*NEW'15 CORRECT SOLUTION*/
-	//If already mapped
+	// If already mapped
 	if ((page_table_entry & PERM_PRESENT) == PERM_PRESENT)
 	{
-		//on this pa, then do nothing
+		// on this pa, then do nothing
 		if (EXTRACT_ADDRESS(page_table_entry) == physical_address)
 			return 0;
-		//on another pa, then unmap it
+		// on another pa, then unmap it
 		else
-			unmap_frame(ptr_page_directory , virtual_address);
+			unmap_frame(ptr_page_directory, virtual_address);
 	}
 	ptr_frame_info->references++;
 
@@ -424,7 +419,7 @@ int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint
 	/*NEW'23 el7:)
 	 * map_frame(): KEEP THE VALUES OF THE AVAILABLE BITS*/
 	uint32 pte_available_bits = ptr_page_table[PTX(virtual_address)] & PERM_AVAILABLE;
-	ptr_page_table[PTX(virtual_address)] = CONSTRUCT_ENTRY(physical_address , pte_available_bits | perm | PERM_PRESENT);
+	ptr_page_table[PTX(virtual_address)] = CONSTRUCT_ENTRY(physical_address, pte_available_bits | perm | PERM_PRESENT);
 	/*********************************************************************************/
 
 	return 0;
@@ -437,22 +432,22 @@ int map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_info, uint
 // If the page table entry corresponding to 'virtual_address' exists, then we store a pointer to the table in 'ptr_page_table'
 // Return 0 if there is no frame mapped/buffered at virtual_address.
 //
-struct FrameInfo * get_frame_info(uint32 *ptr_page_directory, uint32 virtual_address, uint32 **ptr_page_table)
+struct FrameInfo *get_frame_info(uint32 *ptr_page_directory, uint32 virtual_address, uint32 **ptr_page_table)
 {
 	// Fill this function in
-	uint32 ret =  get_page_table(ptr_page_directory, virtual_address, ptr_page_table) ;
-	if((*ptr_page_table) != 0)
+	uint32 ret = get_page_table(ptr_page_directory, virtual_address, ptr_page_table);
+	if ((*ptr_page_table) != 0)
 	{
 		uint32 index_page_table = PTX(virtual_address);
 		uint32 page_table_entry = (*ptr_page_table)[index_page_table];
 
-		/*2023 el7:)*///Make sure it has a frame number other than 0 (not just a marked page from the page allocator)
-		/*2025 el7:)*///or if it's 0, make sure it's either present or buffered
-		//if( page_table_entry != 0)
-		//if((page_table_entry & ~0xFFF) != 0)
-		if( ((page_table_entry & ~0xFFF) != 0) || ((page_table_entry & (PERM_PRESENT|PERM_BUFFERED)) != 0))
+		/*2023 el7:)*/ // Make sure it has a frame number other than 0 (not just a marked page from the page allocator)
+		/*2025 el7:)*/ // or if it's 0, make sure it's either present or buffered
+		// if( page_table_entry != 0)
+		// if((page_table_entry & ~0xFFF) != 0)
+		if (((page_table_entry & ~0xFFF) != 0) || ((page_table_entry & (PERM_PRESENT | PERM_BUFFERED)) != 0))
 		{
-			return to_frame_info( EXTRACT_ADDRESS ( page_table_entry ) );
+			return to_frame_info(EXTRACT_ADDRESS(page_table_entry));
 		}
 		return 0;
 	}
@@ -477,13 +472,13 @@ void unmap_frame(uint32 *ptr_page_directory, uint32 virtual_address)
 {
 	// Fill this function in
 	uint32 *ptr_page_table;
-	struct FrameInfo* ptr_frame_info = get_frame_info(ptr_page_directory, virtual_address, &ptr_page_table);
-	if( ptr_frame_info != 0 )
+	struct FrameInfo *ptr_frame_info = get_frame_info(ptr_page_directory, virtual_address, &ptr_page_table);
+	if (ptr_frame_info != 0)
 	{
 		if (ptr_frame_info->isBuffered && !CHECK_IF_KERNEL_ADDRESS((uint32)virtual_address))
-		cprintf("WARNING: Freeing BUFFERED frame at va %x!!!\n", virtual_address) ;
+			cprintf("WARNING: Freeing BUFFERED frame at va %x!!!\n", virtual_address);
 		decrement_references(ptr_frame_info);
-		
+
 		/*********************************************************************************/
 		/*NEW'23 el7:)
 		 * unmap_frame(): KEEP THE VALUES OF THE AVAILABLE BITS*/
@@ -493,9 +488,8 @@ void unmap_frame(uint32 *ptr_page_directory, uint32 virtual_address)
 
 		tlb_invalidate(ptr_page_directory, (void *)virtual_address);
 	}
-	ptr_frame_info->va = 0;
+	ptr_frame_info->virtual_address = 0;
 }
-
 
 /*/this function should be called only in the env_create() for creating the page table if not exist
  * (without causing page fault as the normal map_frame())*/
@@ -518,16 +512,16 @@ int loadtime_map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_i
 
 	uint32 page_directory_entry = ptr_page_directory[PDX(virtual_address)];
 
-	if(USE_KHEAP && !CHECK_IF_KERNEL_ADDRESS(virtual_address))
+	if (USE_KHEAP && !CHECK_IF_KERNEL_ADDRESS(virtual_address))
 	{
-		ptr_page_table = (uint32*)kheap_virtual_address(EXTRACT_ADDRESS(page_directory_entry)) ;
+		ptr_page_table = (uint32 *)kheap_virtual_address(EXTRACT_ADDRESS(page_directory_entry));
 	}
 	else
 	{
-		ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(page_directory_entry)) ;
+		ptr_page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(page_directory_entry));
 	}
 
-	//if page table not exist, create it in memory and link it with the directory
+	// if page table not exist, create it in memory and link it with the directory
 	if (page_directory_entry == 0)
 	{
 #if USE_KHEAP
@@ -542,48 +536,44 @@ int loadtime_map_frame(uint32 *ptr_page_directory, struct FrameInfo *ptr_frame_i
 	}
 
 	ptr_frame_info->references++;
-	ptr_page_table[PTX(virtual_address)] = CONSTRUCT_ENTRY(physical_address , perm | PERM_PRESENT);
+	ptr_page_table[PTX(virtual_address)] = CONSTRUCT_ENTRY(physical_address, perm | PERM_PRESENT);
 
 	return 0;
 }
-
 
 ///****************************************************************************************///
 ///******************************* END OF MAPPING USER SPACE ******************************///
 ///****************************************************************************************///
 
-
 //==================================================================================================
 //==================================================================================================
 //==================================================================================================
-
-
 
 // calculate_available_frames:
 struct freeFramesCounters calculate_available_frames()
 {
 	struct FrameInfo *ptr;
-	uint32 totalFreeUnBuffered = 0 ;
-	uint32 totalFreeBuffered = 0 ;
-	uint32 totalModified = 0 ;
+	uint32 totalFreeUnBuffered = 0;
+	uint32 totalFreeBuffered = 0;
+	uint32 totalModified = 0;
 	bool lock_is_held = holding_kspinlock(&MemFrameLists.mfllock);
 	if (!lock_is_held)
 	{
 		acquire_kspinlock(&MemFrameLists.mfllock);
 	}
 	{
-		//calculate the free frames from the free frame list
+		// calculate the free frames from the free frame list
 
 		LIST_FOREACH(ptr, &MemFrameLists.free_frame_list)
 		{
 			if (ptr->isBuffered)
-				totalFreeBuffered++ ;
+				totalFreeBuffered++;
 			else
-				totalFreeUnBuffered++ ;
+				totalFreeUnBuffered++;
 		}
 
 		/*2023: UPDATE based on suggestion from T112 2023.Term1*/
-		totalModified= LIST_SIZE(&MemFrameLists.modified_frame_list);
+		totalModified = LIST_SIZE(&MemFrameLists.modified_frame_list);
 		//	LIST_FOREACH(ptr, &modified_frame_list)
 		//	{
 		//		totalModified++ ;
@@ -593,9 +583,9 @@ struct freeFramesCounters calculate_available_frames()
 	{
 		release_kspinlock(&MemFrameLists.mfllock);
 	}
-	struct freeFramesCounters counters ;
-	counters.freeBuffered = totalFreeBuffered ;
-	counters.freeNotBuffered = totalFreeUnBuffered ;
+	struct freeFramesCounters counters;
+	counters.freeBuffered = totalFreeBuffered;
+	counters.freeNotBuffered = totalFreeUnBuffered;
 	counters.modified = totalModified;
 	return counters;
 }
