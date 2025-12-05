@@ -489,7 +489,11 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		else
 		{
 			struct FrameInfo *ptr_frame_info = NULL;
-			allocate_frame(&ptr_frame_info);
+			int ret_allocate = allocate_frame(&ptr_frame_info);
+			if (ret_allocate == E_NO_MEM)
+			{
+				panic("No free frame available");
+			}
 
 			map_frame(faulted_env->env_page_directory, ptr_frame_info, fault_va, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
 
@@ -562,7 +566,11 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			fault_va = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 			struct FrameInfo *ptr_frame_info = NULL;
-			allocate_frame(&ptr_frame_info);
+			int ret_allocate = allocate_frame(&ptr_frame_info);
+			if (ret_allocate == E_NO_MEM)
+			{
+				panic("No free frame available");
+			}
 
 			map_frame(faulted_env->env_page_directory, ptr_frame_info, fault_va, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
 
@@ -687,7 +695,11 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 				// [4] Allocate frame and map new page
 				struct FrameInfo *ptr_frame_info = NULL;
-				allocate_frame(&ptr_frame_info);
+				int ret_allocate = allocate_frame(&ptr_frame_info);
+				if (ret_allocate == E_NO_MEM)
+				{
+					panic("No free frame available");
+				}
 
 				map_frame(faulted_env->env_page_directory, ptr_frame_info, fault_va, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
 
