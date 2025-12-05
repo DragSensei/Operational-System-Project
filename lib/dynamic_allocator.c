@@ -52,7 +52,7 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	}
 
 	LIST_INIT(&freePagesList);
-	for (int i = get_index(dynAllocStart); i < get_index(dynAllocEnd); i++) {
+	for (int i = get_index((void*)dynAllocStart); i < get_index((void*)dynAllocEnd); i++) {
 		pageBlockInfoArr[i].block_size = 0;
 		pageBlockInfoArr[i].num_of_free_blocks = 0;
 		LIST_INSERT_TAIL(&freePagesList, &pageBlockInfoArr[i]);
@@ -64,7 +64,7 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 }
 
 int get_index(void* va) {
-	int index = ROUNDDOWN(va, PAGE_SIZE) - dynAllocStart;
+	int index = ROUNDDOWN((uint32)va, PAGE_SIZE) - dynAllocStart;
 	index = index >> PGSHIFT;
 	return index;
 }
@@ -76,7 +76,7 @@ __inline__ uint32 get_block_size(void *va)
 {
 	//TODO: [PROJECT'25.GM#1] DYNAMIC ALLOCATOR - #2 get_block_size
 	//Your code is here
-	struct PageInfoElement ptrPageInfo = pageBlockInfoArr[get_index((uint32)va)];
+	struct PageInfoElement ptrPageInfo = pageBlockInfoArr[get_index((void*)va)];
 
 
 	return ptrPageInfo.block_size;
@@ -125,7 +125,7 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 		struct PageInfoElement* ptrPage = LIST_FIRST(&freePagesList);
 		LIST_REMOVE(&freePagesList, ptrPage);
 
-		get_page(to_page_va(ptrPage));
+		get_page((void*)to_page_va(ptrPage));
 
 		ptrPage->block_size = blockSize;
 		ptrPage->num_of_free_blocks =(PAGE_SIZE / blockSize) - 1;
@@ -138,7 +138,7 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 			LIST_INSERT_TAIL(&freeBlockLists[index], ptrBlock);
 		}
 
-		return pageAddress;
+		return (void*)pageAddress;
 	}
 
 
@@ -191,7 +191,7 @@ void free_block(void *va)
 			struct BlockElement* block_to_remove = (struct BlockElement*)(page_va + (i*block_size));
 			LIST_REMOVE(&freeBlockLists[list_index], block_to_remove);	
 		}
-		return_page(page_va);
+		return_page((void*)page_va);
 		LIST_INSERT_TAIL(&freePagesList, page_info);
 		page_info->block_size = 0;
 		page_info->num_of_free_blocks = 0;
@@ -213,24 +213,11 @@ void *realloc_block(void* va, uint32 new_size)
 	{
 	//TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - realloc_block
 	//Your code is here
-	if(va == NULL)
-		return alloc_block(new_size);
-
-	if(new_size == 0)
-	{
-		free_block(va);
-		return NULL;
-	}
-
-	if (new_size > DYN_ALLOC_MAX_BLOCK_SIZE)
-		panic("Too big for DYNAMIC ALLOCATOR");
-	
-	uint32 new_va;
 	//Condition if the size we can allocate, we allocate and free the old address
 	//and the old data in the old block, we transfer to the new block.
 	// if we cant allocate, we dont free.
 
 	//Comment the following line
-	//panic("realloc_block() Not implemented yet");
+	panic("realloc_block() Not implemented yet");
 }
 }

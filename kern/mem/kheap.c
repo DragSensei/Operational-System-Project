@@ -398,7 +398,7 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 
 extern __inline__ uint32 get_block_size(void *va);
 
-typedef struct CUSTOM_FIT_VARIABLES 
+struct CUSTOM_FIT_VARIABLES 
 {
 	uint32 start_idx;
 	uint32 break_idx;
@@ -443,40 +443,40 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	}
 	else if (new_size <= DYN_ALLOC_MAX_BLOCK_SIZE)
 	{
-		if (virtual_address >= KHEAP_START_ADDR)
+		if ((uint32) virtual_address >= KHEAP_START_ADDR)
 		{
 			uint32 va_idx = ((uint32) virtual_address - KHEAP_START_ADDR) / PAGE_SIZE;
 			uint32 old_size = kheap_allocations[va_idx];
 
-			uint32 va = alloc_block(new_size);
-			if (va == NULL)
+			uint32 va = (uint32)alloc_block(new_size);
+			if (va == 0)
 			{
 				release_kspinlock(&kheap_lock);
 				return NULL;
 			}
 
 			uint32 copy_size = (old_size < new_size) ? old_size : new_size;
-			memcpy(va, virtual_address, copy_size);
+			memcpy((void*)va, virtual_address, copy_size);
 			release_kspinlock(&kheap_lock);
 			kfree(virtual_address);
 
-			return va;
+			return (void*)va;
 		}
 		uint32 old_size = get_block_size(virtual_address);
-		uint32 va = alloc_block(new_size);
+		uint32 va = (uint32)alloc_block(new_size);
 
-		if (va == NULL)
+		if (va == 0)
 		{
 			release_kspinlock(&kheap_lock);
 			return NULL;
 		}
 
 		uint32 copy_size = (old_size < new_size) ? old_size : new_size;
-		memcpy(va, virtual_address, copy_size);
+		memcpy((void*)va, virtual_address, copy_size);
 		free_block(virtual_address);
 
 		release_kspinlock(&kheap_lock);
-		return va;
+		return (void*)va;
 	}
 	else if ((uint32) virtual_address >= KERNEL_HEAP_START && (uint32) virtual_address < KHEAP_START_ADDR)
 	{
@@ -512,19 +512,19 @@ void *krealloc(void *virtual_address, uint32 new_size)
 
 	if (new_size <= kheap_allocations[var.va_idx])
 	{
-		uint32 el_7agm_eladeem = kheap_allocations[var.va_idx];
-		uint32 el_m7tagen_nshylhom = el_7agm_eladeem - rounded_size;
+		uint32 old_size = kheap_allocations[var.va_idx];
+		uint32 to_be_unmarked = old_size - rounded_size;
 
 		kheap_allocations[var.va_idx] = rounded_size;
 
-		if (el_m7tagen_nshylhom > 0)
+		if (to_be_unmarked > 0)
 		{
 			uint32 tmp_va = (uint32) virtual_address + rounded_size;
 			uint32 tmp_idx = var.va_idx + rounded_size / PAGE_SIZE;
-			kheap_allocations[tmp_idx] = el_m7tagen_nshylhom;
+			kheap_allocations[tmp_idx] = to_be_unmarked;
 
 			release_kspinlock(&kheap_lock);
-			kfree((uint32) tmp_va);
+			kfree((void*) tmp_va);
 			return virtual_address;
 		}
 
@@ -551,7 +551,7 @@ void *krealloc(void *virtual_address, uint32 new_size)
 				kheap_allocations[var.va_idx] = rounded_size;
 				for (int i = old_pages; i < new_pages; i++)
 				{
-					uint32 va_to_map = virtual_address + (i * PAGE_SIZE);
+					uint32 va_to_map = (uint32)virtual_address + (i * PAGE_SIZE);
 					struct FrameInfo *fi = NULL;
 
 					int ret = allocate_frame(&fi);
@@ -559,10 +559,10 @@ void *krealloc(void *virtual_address, uint32 new_size)
 					{
 						for (uint32 k = old_pages; k < i; k++)
 						{
-							unmap_frame(ptr_page_directory, virtual_address + (k * PAGE_SIZE));
+							unmap_frame(ptr_page_directory, (uint32)virtual_address + (k * PAGE_SIZE));
 						}
 
-						if (virtual_address == kheapPageAllocBreak - rounded_size)
+						if ((uint32)virtual_address == kheapPageAllocBreak - rounded_size)
 						{
 							kheapPageAllocBreak -= rounded_size;
 						}
@@ -576,10 +576,10 @@ void *krealloc(void *virtual_address, uint32 new_size)
 						free_frame(fi);
 						for (uint32 k = old_pages; k < i; k++)
 						{
-							unmap_frame(ptr_page_directory, virtual_address + (k * PAGE_SIZE));
+							unmap_frame(ptr_page_directory, (uint32)virtual_address + (k * PAGE_SIZE));
 						}
 
-						if (virtual_address == kheapPageAllocBreak - rounded_size)
+						if ((uint32)virtual_address == kheapPageAllocBreak - rounded_size)
 						{
 							kheapPageAllocBreak -= rounded_size;
 						}

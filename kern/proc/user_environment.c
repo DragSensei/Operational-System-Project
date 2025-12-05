@@ -516,15 +516,15 @@ void env_free(struct Env *e)
 	// {
 	// 		delete_shared_object(itr->ownerID, itr->ID);
 	// }
-	for (int i = 0; i < 1024; i++)
+	for (int i = 0; i < PDX(USER_TOP); i++)
 	{
 		uint32 va = i << 22;
 		if (pd_is_table_used(e->env_page_directory, va))
 		{
 			uint32 *ptr_page_table = NULL;
 			get_page_table(e->env_page_directory, va, &ptr_page_table);
-			pd_set_table_unused(e, va);
-			pd_clear_page_dir_entry(e, va);
+			pd_set_table_unused(e->env_page_directory, va);
+			pd_clear_page_dir_entry(e->env_page_directory, va);
 
 			if (ptr_page_table != NULL)
 			{

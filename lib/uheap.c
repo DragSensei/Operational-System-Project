@@ -163,6 +163,8 @@ void* malloc(uint32 size)
 
 	if (allocated_address != NULL)
 	{
+		// cprintf("ANA FEL (allocated_address != NULL)\n");
+
 		sys_allocate_user_mem((uint32)allocated_address, rounded_size);
 		return allocated_address;
 	}
@@ -178,6 +180,7 @@ void* malloc(uint32 size)
 	}
 	if (info.curr_hole_size > info.worst_fit_size)
 	{
+		// cprintf("ANA FEL (info.curr_hole_size > info.worst_fit_size)\n");
 		info.worst_fit_size = info.curr_hole_size;
 		info.worst_fit_addr = info.curr_hole_va;
 	}
@@ -190,8 +193,10 @@ void* malloc(uint32 size)
 		sys_allocate_user_mem((uint32) info.worst_fit_addr, rounded_size);
 		return (void*) info.worst_fit_addr;	
 	}
-	if ((limit - end_ptr) >= rounded_size) // 
+	if ((limit - end_ptr) >= rounded_size) 
 	{
+		// cprintf("ANA FEL ((limit - end_ptr) >= rounded_size)\n");
+		
 		uint32 extend_block = end_ptr;
 		uheapPageAllocBreak += rounded_size;
 
@@ -226,8 +231,11 @@ void free(void* virtual_address)
 	uint32 size = allocations[index];
 
 	MARK_INDEX_FREE((allocations[index] / PAGE_SIZE), index);
-	if (size == 0) return;
-
+	if (size == 0) 
+	{
+		// cprintf("ANA FEL  (size == 0)\n");
+		return;
+	}
 	if (uheapPageAllocBreak == (va + size))
 	{
 		uheapPageAllocBreak = va;
@@ -265,6 +273,7 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 	void* allocated_address = CUSTOM_FIT_STRAT(&info, str_ptr, end_ptr, num_pages, rounded_size);
 	if (allocated_address != NULL)
 	{
+		// cprintf("ANA FEL (allocated_address != NULL)\n");
 		uint32 ret = sys_create_shared_object(sharedVarName, rounded_size, isWritable, allocated_address);
 		if(ret== E_NO_SHARE || ret == E_SHARED_MEM_EXISTS){
 			return NULL;
@@ -278,7 +287,7 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 
 		ARRAY_ADD(info.curr_hole_va, rounded_size);
 
-		uint32 ret = sys_create_shared_object(sharedVarName, rounded_size, isWritable, (uint32) info.curr_hole_va);
+		uint32 ret = sys_create_shared_object(sharedVarName, rounded_size, isWritable, (void*) info.curr_hole_va);
 		if(ret== E_NO_SHARE || ret == E_SHARED_MEM_EXISTS){
 			return NULL;
 		}
@@ -286,6 +295,7 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 	}
 	if (info.curr_hole_size > info.worst_fit_size)
 	{
+		// cprintf("ANA FEL (info.curr_hole_size > info.worst_fit_size)\n");
 		info.worst_fit_size = info.curr_hole_size;
 		info.worst_fit_addr = info.curr_hole_va;
 	}
@@ -295,7 +305,7 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 
 		ARRAY_ADD(info.worst_fit_addr, rounded_size);
 		
-		uint32 ret = sys_create_shared_object(sharedVarName, rounded_size, isWritable, (uint32) info.worst_fit_addr);
+		uint32 ret = sys_create_shared_object(sharedVarName, rounded_size, isWritable, (void*) info.worst_fit_addr);
 		if(ret== E_NO_SHARE || ret == E_SHARED_MEM_EXISTS){
 			return NULL;
 		}
@@ -309,7 +319,7 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 
 		ARRAY_ADD(extend_block, rounded_size);
 		
-			uint32 ret = sys_create_shared_object(sharedVarName, rounded_size, isWritable, (uint32) extend_block);
+			uint32 ret = sys_create_shared_object(sharedVarName, rounded_size, isWritable, (void*) extend_block);
 		if(ret== E_NO_SHARE || ret == E_SHARED_MEM_EXISTS){
 			return NULL;
 		}
@@ -356,7 +366,7 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 
 		ARRAY_ADD(info.curr_hole_va, rounded_size);
 
-		uint32 ret = sys_get_shared_object(ownerEnvID, sharedVarName, (uint32) info.curr_hole_va);
+		uint32 ret = sys_get_shared_object(ownerEnvID, sharedVarName, (void*) info.curr_hole_va);
 		if(ret == E_SHARED_MEM_EXISTS){
 			return NULL;
 		}
@@ -374,7 +384,7 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 
 		ARRAY_ADD(info.worst_fit_addr, rounded_size);
 		
-		uint32 ret = sys_get_shared_object(ownerEnvID, sharedVarName, (uint32) info.worst_fit_addr);
+		uint32 ret = sys_get_shared_object(ownerEnvID, sharedVarName, (void*) info.worst_fit_addr);
 		if(ret == E_SHARED_MEM_EXISTS){
 			return NULL;
 		}
@@ -388,7 +398,7 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 
 		ARRAY_ADD(extend_block, rounded_size);
 		
-			uint32 ret = sys_get_shared_object(ownerEnvID, sharedVarName, (uint32) extend_block);
+			uint32 ret = sys_get_shared_object(ownerEnvID, sharedVarName, (void*) extend_block);
 		if(ret == E_SHARED_MEM_EXISTS){
 			return NULL;
 		}
