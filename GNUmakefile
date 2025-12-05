@@ -70,7 +70,7 @@ QEMUOPTS 	= -drive file=$(IMAGE),media=disk,format=raw -smp 2 -m 256 $(QEMUEXTRA
 
 
 qemu-slow: all
-    $(V)$(QEMU) -accel tcg -icount shift=4,sleep=on -parallel mon:stdio $(QEMUOPTS)
+	$(V)$(QEMU) -accel tcg -icount shift=4,sleep=on -parallel mon:stdio $(QEMUOPTS)
 
 qemu: all
 	$(V)$(QEMU) -parallel mon:stdio $(QEMUOPTS)
@@ -96,4 +96,4 @@ $(OBJDIR)/.deps: $(foreach dir, $(OBJDIRS), $(wildcard $(OBJDIR)/$(dir)/*.d))
 -include $(OBJDIR)/.deps
 
 
-.PHONY: all clean qemu
+.PHONY: all clean qemu qemu-slow
