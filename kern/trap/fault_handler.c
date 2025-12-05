@@ -296,6 +296,8 @@ void table_fault_handler(struct Env *curenv, uint32 fault_va)
 
 int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct PageRef_List *pageReferences)
 {
+	// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #2 get_optimal_num_faults
+	// Your code is here
 
 	// [1] Copy initial WS
 	struct WS_List copyWS;
@@ -309,9 +311,12 @@ int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct
 		{
 			break;
 		}
+
 		struct WorkingSetElement *copy = (struct WorkingSetElement *)kmalloc(sizeof(struct WorkingSetElement));
 		copy->virtual_address = ws_it->virtual_address;
+
 		LIST_INSERT_TAIL(&copyWS, copy);
+
 		currentWSsize++;
 	}
 
@@ -361,7 +366,9 @@ int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct
 
 			while (look != NULL)
 			{
-				if (ROUNDDOWN(look->virtual_address, PAGE_SIZE) == ws_it->virtual_address)
+
+				uint32 next_va = ROUNDDOWN(look->virtual_address, PAGE_SIZE);
+				if (next_va == ws_it->virtual_address)
 				{
 					found = 1;
 					break;
@@ -410,13 +417,10 @@ int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct
 
 	return faults;
 
-	// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #2 get_optimal_num_faults
-	// Your code is here
 	// Comment the following line
 	// panic("get_optimal_num_faults() is not implemented yet...!!");
 }
 
-// [*] GLOBAL ACTIVE WS
 struct WS_List activeWS;
 struct Env *activeWS_owner = NULL;
 int activeWS_init = 0;
@@ -426,7 +430,10 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 #if USE_KHEAP
 	if (isPageReplacmentAlgorithmOPTIMAL())
 	{
-		uint32 base_va = ROUNDDOWN(fault_va, PAGE_SIZE);
+		// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #1 Optimal Reference Stream
+		// Your code is here
+
+		fault_va = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 		// [1] Keep track of the Active WS
 		if (activeWS_owner != faulted_env)
@@ -441,7 +448,9 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						kfree(temp_ws);
 					}
 				}
+
 				{
+
 					struct PageRefElement *temp_ref;
 					LIST_FOREACH_SAFE(temp_ref, &(activeWS_owner->referenceStreamList), PageRefElement)
 					{
@@ -449,6 +458,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 						kfree(temp_ref);
 					}
 				}
+
 				activeWS_init = 0;
 			}
 
@@ -459,40 +469,40 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				struct WorkingSetElement *copy = env_page_ws_list_create_element(faulted_env, ws_it_1->virtual_address);
 				if (copy == NULL)
 				{
-					panic("activeWS copy failed!");
+					panic("ActiveWS copy failed");
 				}
 				LIST_INSERT_TAIL(&activeWS, copy);
 			}
+
 			activeWS_owner = faulted_env;
 			activeWS_init = 1;
 		}
 
 		// [2] If faulted page not in memory, read it from disk & Else, just set its present bit
 		uint32 *ptr_page_table = NULL;
-		struct FrameInfo *ptr_frame_info_exist = get_frame_info(faulted_env->env_page_directory, base_va, &ptr_page_table);
+		struct FrameInfo *ptr_frame_info_exist = get_frame_info(faulted_env->env_page_directory, fault_va, &ptr_page_table);
 
 		if (ptr_frame_info_exist != NULL)
 		{
-			pt_set_page_permissions(faulted_env->env_page_directory, base_va, PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
+			pt_set_page_permissions(faulted_env->env_page_directory, fault_va, PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
 		}
 		else
 		{
 			struct FrameInfo *ptr_frame_info = NULL;
-			int ret_from_allocte = allocate_frame(&ptr_frame_info);
-			if (ret_from_allocte == E_NO_MEM)
+			int ret_allocate = allocate_frame(&ptr_frame_info);
+			if (ret_allocate == E_NO_MEM)
 			{
-				panic("page_fault_handler(): NO free frame available!");
+				panic("No free frame available");
 			}
-			map_frame(faulted_env->env_page_directory, ptr_frame_info, base_va, PERM_USER | PERM_WRITEABLE);
 
-			int ret_from_pf_read = pf_read_env_page(faulted_env, (void *)base_va);
-			if (ret_from_pf_read == E_PAGE_NOT_EXIST_IN_PF)
+			map_frame(faulted_env->env_page_directory, ptr_frame_info, fault_va, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
+
+			int ret_pf_read = pf_read_env_page(faulted_env, (void *)fault_va);
+			if (ret_pf_read == E_PAGE_NOT_EXIST_IN_PF)
 			{
-
-				if (!((base_va >= USTACKBOTTOM && base_va < USTACKTOP) ||
-					  (base_va >= USER_HEAP_START && base_va < USER_HEAP_MAX)))
+				if (!((fault_va >= USTACKBOTTOM && fault_va < USTACKTOP) || (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)))
 				{
-					unmap_frame(faulted_env->env_page_directory, base_va);
+					unmap_frame(faulted_env->env_page_directory, fault_va);
 					env_exit();
 				}
 			}
@@ -503,7 +513,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		struct WorkingSetElement *ws_it_2;
 		LIST_FOREACH(ws_it_2, &activeWS)
 		{
-			if (ws_it_2->virtual_address == base_va)
+			if (ws_it_2->virtual_address == fault_va)
 			{
 				found_in_activeWS = 1;
 				break;
@@ -524,10 +534,10 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		}
 
 		// [4] Add the faulted page to the Active WS
-		struct WorkingSetElement *new_ws_element = env_page_ws_list_create_element(faulted_env, base_va);
+		struct WorkingSetElement *new_ws_element = env_page_ws_list_create_element(faulted_env, fault_va);
 		if (new_ws_element == NULL)
 		{
-			panic("Cannot create WS element!");
+			panic("Can't Create ws element");
 		}
 		LIST_INSERT_TAIL(&activeWS, new_ws_element);
 
@@ -535,14 +545,12 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		struct PageRefElement *new_ref_element = (struct PageRefElement *)kmalloc(sizeof(struct PageRefElement));
 		if (new_ref_element != NULL)
 		{
-			new_ref_element->virtual_address = base_va;
+			new_ref_element->virtual_address = fault_va;
 			LIST_INSERT_TAIL(&(faulted_env->referenceStreamList), new_ref_element);
 		}
 
 		return;
 
-		// TODO: [PROJECT'25.IM#1] FAULT HANDLER II - #3 Optimal Replacement
-		// Your code is here
 		// Comment the following line
 		// panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
 	}
@@ -552,34 +560,34 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		uint32 wsSize = LIST_SIZE(&(faulted_env->page_WS_list));
 		if (wsSize < (faulted_env->page_WS_max_size))
 		{
+			// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
+			// Your code is here
 
-			uint32 base_va = ROUNDDOWN(fault_va, PAGE_SIZE);
+			fault_va = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 			struct FrameInfo *ptr_frame_info = NULL;
-			int ret_from_allocte = allocate_frame(&ptr_frame_info);
-			if (ret_from_allocte == E_NO_MEM)
+			int ret_allocate = allocate_frame(&ptr_frame_info);
+			if (ret_allocate == E_NO_MEM)
 			{
-				panic("page_fault_handler(): NO free frame available!");
+				panic("No free frame available");
 			}
-			map_frame(faulted_env->env_page_directory, ptr_frame_info, base_va, PERM_USER | PERM_WRITEABLE);
 
-			int ret_from_pf_read = pf_read_env_page(faulted_env, (void *)base_va);
-			if (ret_from_pf_read == E_PAGE_NOT_EXIST_IN_PF)
+			map_frame(faulted_env->env_page_directory, ptr_frame_info, fault_va, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
+
+			int ret_pf_read = pf_read_env_page(faulted_env, (void *)fault_va);
+			if (ret_pf_read == E_PAGE_NOT_EXIST_IN_PF)
 			{
-
-				if (!((base_va >= USTACKBOTTOM && base_va < USTACKTOP) ||
-					  (base_va >= USER_HEAP_START && base_va < USER_HEAP_MAX)))
+				if (!((fault_va >= USTACKBOTTOM && fault_va < USTACKTOP) || (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)))
 				{
-					unmap_frame(faulted_env->env_page_directory, base_va);
+					unmap_frame(faulted_env->env_page_directory, fault_va);
 					env_exit();
 				}
 			}
 
-			struct WorkingSetElement *new_ws_element = env_page_ws_list_create_element(faulted_env, base_va);
-
+			struct WorkingSetElement *new_ws_element = env_page_ws_list_create_element(faulted_env, fault_va);
 			if (new_ws_element == NULL)
 			{
-				panic("Cannot create WS element!");
+				panic("Can't Create ws element");
 			}
 
 			if (faulted_env->page_last_WS_element != NULL)
@@ -590,7 +598,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 			{
 				LIST_INSERT_TAIL(&(faulted_env->page_WS_list), new_ws_element);
 			}
-
 			if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
 			{
 				if (faulted_env->page_last_WS_element == NULL)
@@ -601,8 +608,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 			return;
 
-			// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #3 placement
-			// Your code is here
 			// Comment the following line
 			// panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
 		}
@@ -610,15 +615,22 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 		{
 			if (isPageReplacmentAlgorithmCLOCK())
 			{
-				uint32 base_va = ROUNDDOWN(fault_va, PAGE_SIZE);
+				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Clock
+				// Your code is here
+
+				fault_va = ROUNDDOWN(fault_va, PAGE_SIZE);
 
 				// [1] Initialize clock pointer
 				struct WorkingSetElement *clock_ptr = faulted_env->page_last_WS_element;
 				if (clock_ptr == NULL)
+				{
 					clock_ptr = LIST_FIRST(&(faulted_env->page_WS_list));
+				}
 
 				if (clock_ptr == NULL)
-					panic("CLOCK: empty WS on replacement");
+				{
+					panic("Empty WS on replacement");
+				}
 
 				// [2] Find victim
 				int ws_size = LIST_SIZE(&(faulted_env->page_WS_list));
@@ -661,9 +673,11 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				}
 
 				if (victim == NULL)
+				{
 					victim = clock_ptr;
+				}
 
-				// [3] Update memory & remove victim mappin
+				// [3] Update memory & remove victim mapping
 				uint32 victim_va = ROUNDDOWN(victim->virtual_address, PAGE_SIZE);
 
 				uint32 *victim_page_table = NULL;
@@ -687,32 +701,31 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 				// [4] Allocate frame and map new page
 				struct FrameInfo *ptr_frame_info = NULL;
-				int ret_from_allocte = allocate_frame(&ptr_frame_info);
-				if (ret_from_allocte == E_NO_MEM)
+				int ret_allocate = allocate_frame(&ptr_frame_info);
+				if (ret_allocate == E_NO_MEM)
 				{
-					panic("page_fault_handler(): NO free frame available!");
+					panic("No free frame available");
 				}
-				map_frame(faulted_env->env_page_directory, ptr_frame_info, base_va, PERM_USER | PERM_WRITEABLE);
 
-				int ret_from_pf_read = pf_read_env_page(faulted_env, (void *)base_va);
-				if (ret_from_pf_read == E_PAGE_NOT_EXIST_IN_PF)
+				map_frame(faulted_env->env_page_directory, ptr_frame_info, fault_va, PERM_USER | PERM_WRITEABLE | PERM_PRESENT);
+
+				int ret_pf_read = pf_read_env_page(faulted_env, (void *)fault_va);
+				if (ret_pf_read == E_PAGE_NOT_EXIST_IN_PF)
 				{
-
-					if (!((base_va >= USTACKBOTTOM && base_va < USTACKTOP) ||
-						  (base_va >= USER_HEAP_START && base_va < USER_HEAP_MAX)))
+					if (!((fault_va >= USTACKBOTTOM && fault_va < USTACKTOP) || (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)))
 					{
-						unmap_frame(faulted_env->env_page_directory, base_va);
+						unmap_frame(faulted_env->env_page_directory, fault_va);
 						env_exit();
 					}
 				}
 
-				pt_set_page_permissions(faulted_env->env_page_directory, base_va, PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
+				pt_set_page_permissions(faulted_env->env_page_directory, fault_va, PERM_PRESENT | PERM_USER | PERM_WRITEABLE, 0);
 
 				// [5] create new WS element
-				struct WorkingSetElement *new_ws_element = env_page_ws_list_create_element(faulted_env, base_va);
+				struct WorkingSetElement *new_ws_element = env_page_ws_list_create_element(faulted_env, fault_va);
 				if (new_ws_element == NULL)
 				{
-					panic("Clock: cannot create new WS element");
+					panic("Can't create new WS element");
 				}
 
 				if (prev_element != NULL)
@@ -738,8 +751,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 
 				return;
 
-				// TODO: [PROJECT'25.IM#6] FAULT HANDLER II - #3 Clock
-				// Your code is here
 				// Comment the following line
 				// panic("page_fault_handler().REPLACEMENT is not implemented yet...!!");
 			}

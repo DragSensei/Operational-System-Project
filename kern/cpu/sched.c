@@ -372,7 +372,7 @@ void clock_interrupt_handler(struct Trapframe* tf)
                 struct Env *next_proc = LIST_NEXT(proc);
 
                 // Check starvation
-                if ((timer_ticks() - proc->startticks) >= prirr_starvation_threshold)
+                if ((timer_ticks() - proc->starter) >= prirr_starvation_threshold)
                 {
                     // Promote ONE process from this queue
                     env_set_priority(proc->env_id, proc->priority - 1);

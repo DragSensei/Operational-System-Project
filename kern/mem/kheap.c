@@ -334,15 +334,15 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 	uint32 offset = physical_address & 0xFFF;
 	struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
 
-	if (ptr_frame_info == NULL || ptr_frame_info->va == 0)
+	if (ptr_frame_info == NULL || ptr_frame_info->virtual_address == 0)
 	{
 		release_kspinlock(&kheap_lock);
 		return 0;
 	}
 
-	uint32 va = ptr_frame_info->va + offset;
+	uint32 virtual_address = ptr_frame_info->virtual_address + offset;
 	release_kspinlock(&kheap_lock);
-	return va;
+	return virtual_address;
 	// Comment the following line
 	//  panic("kheap_virtual_address() is not implemented yet...!!");
 
@@ -358,6 +358,7 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 
 	// TODO: [PROJECT'25.GM#2] KERNEL HEAP - #4 kheap_physical_address
 	// Your code is here
+
 	if (virtual_address < KERNEL_HEAP_START || virtual_address >= KERNEL_HEAP_MAX)
 	{
 		release_kspinlock(&kheap_lock);
@@ -383,9 +384,10 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 	uint32 page_offset = virtual_address & 0xFFF;
 	uint32 frame_number = pte & 0xFFFFF000;
 
-	uint32 pa = frame_number | page_offset;
+	uint32 physical_address = frame_number | page_offset;
 	release_kspinlock(&kheap_lock);
-	return pa;
+	return physical_address;
+
 	// Comment the following line
 	//  panic("kheap_physical_address() is not implemented yet...!!");
 
@@ -410,7 +412,7 @@ struct CUSTOM_FIT_VARIABLES
 	uint32 worst_fit_size;
 
 	uint32 found_va;
-	uint32 va_idx; 	
+	uint32 va_idx;
 };
 
 void *krealloc(void *virtual_address, uint32 new_size)
@@ -432,7 +434,7 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	if (virtual_address == NULL)
 	{
 		release_kspinlock(&kheap_lock);
-		void* va = kmalloc(new_size);
+		void *va = kmalloc(new_size);
 		return va;
 	}
 	else if (new_size == 0)
@@ -445,7 +447,7 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	{
 		if ((uint32) virtual_address >= KHEAP_START_ADDR)
 		{
-			uint32 va_idx = ((uint32) virtual_address - KHEAP_START_ADDR) / PAGE_SIZE;
+			uint32 va_idx = ((uint32)virtual_address - KHEAP_START_ADDR) / PAGE_SIZE;
 			uint32 old_size = kheap_allocations[va_idx];
 
 			uint32 va = (uint32)alloc_block(new_size);
@@ -478,11 +480,11 @@ void *krealloc(void *virtual_address, uint32 new_size)
 		release_kspinlock(&kheap_lock);
 		return (void*)va;
 	}
-	else if ((uint32) virtual_address >= KERNEL_HEAP_START && (uint32) virtual_address < KHEAP_START_ADDR)
+	else if ((uint32)virtual_address >= KERNEL_HEAP_START && (uint32)virtual_address < KHEAP_START_ADDR)
 	{
 		uint32 old_size = get_block_size(virtual_address);
 		release_kspinlock(&kheap_lock);
-		void* va = kmalloc(new_size);
+		void *va = kmalloc(new_size);
 		acquire_kspinlock(&kheap_lock);
 
 		if (va == NULL)
@@ -491,7 +493,7 @@ void *krealloc(void *virtual_address, uint32 new_size)
 		memcpy(va, virtual_address, old_size);
 		free_block(virtual_address);
 		release_kspinlock(&kheap_lock);
-		
+
 		return va;
 	}
 
@@ -504,11 +506,10 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	var.worst_fit_idx = -1;
 	var.worst_fit_size = 0;
 	var.found_va = 0;
-	var.va_idx = ((uint32)virtual_address  - KHEAP_START_ADDR) / PAGE_SIZE;
+	var.va_idx = ((uint32)virtual_address - KHEAP_START_ADDR) / PAGE_SIZE;
 
 	uint32 rounded_size = ROUNDUP(new_size, PAGE_SIZE);
-	uint32 needed_pages =rounded_size / PAGE_SIZE;
-
+	uint32 needed_pages = rounded_size / PAGE_SIZE;
 
 	if (new_size <= kheap_allocations[var.va_idx])
 	{
@@ -519,7 +520,7 @@ void *krealloc(void *virtual_address, uint32 new_size)
 
 		if (to_be_unmarked > 0)
 		{
-			uint32 tmp_va = (uint32) virtual_address + rounded_size;
+			uint32 tmp_va = (uint32)virtual_address + rounded_size;
 			uint32 tmp_idx = var.va_idx + rounded_size / PAGE_SIZE;
 			kheap_allocations[tmp_idx] = to_be_unmarked;
 
@@ -531,7 +532,7 @@ void *krealloc(void *virtual_address, uint32 new_size)
 		release_kspinlock(&kheap_lock);
 		return virtual_address;
 	}
-	else 
+	else
 	{
 		if (kheap_allocations[var.va_idx + kheap_allocations[var.va_idx] / PAGE_SIZE] == 0)
 		{
@@ -597,19 +598,20 @@ void *krealloc(void *virtual_address, uint32 new_size)
 			{
 				uint32 old_size = kheap_allocations[var.va_idx];
 				release_kspinlock(&kheap_lock);
-				void* va = kmalloc(rounded_size);
-				if (va == NULL) return NULL;
+				void *va = kmalloc(rounded_size);
+				if (va == NULL)
+					return NULL;
 				uint32 copy_len = (old_size < rounded_size) ? old_size : rounded_size;
 				memcpy(va, virtual_address, copy_len);
 				kfree(virtual_address);
-				return va; 
+				return va;
 			}
 		}
 	}
 
 	uint32 old_size = kheap_allocations[var.va_idx];
 	release_kspinlock(&kheap_lock);
-	void* va = kmalloc(new_size);
+	void *va = kmalloc(new_size);
 	if (va == NULL)
 		return NULL;
 

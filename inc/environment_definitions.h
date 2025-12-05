@@ -192,7 +192,7 @@ struct Env {
 	//2020
 	uint32 nPageIn, nPageOut, nNewPageAdded;
 	uint32 nClocks ;
-	int64 startticks;//YOUSSEF
+	int64 starter;//YOUSSEF
 };
 
 #define PRIORITY_LOW    		1
