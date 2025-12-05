@@ -669,7 +669,9 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va)
 				}
 
 				if (victim == NULL)
+				{
 					victim = clock_ptr;
+				}
 
 				// [3] Update memory & remove victim mapping
 				uint32 victim_va = ROUNDDOWN(victim->virtual_address, PAGE_SIZE);
