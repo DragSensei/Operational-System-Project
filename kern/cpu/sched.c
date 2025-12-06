@@ -11,8 +11,7 @@
 #include <kern/cpu/cpu.h>
 #include <kern/cpu/picirq.h>
 
-uint32 prirr_starvation_threshold = 0;
-uint32 prirr_num_of_priorities = 0;
+uint32 st = 0;
 
 uint32 isSchedMethodRR(){return (scheduler_method == SCH_RR);}
 uint32 isSchedMethodMLFQ(){return (scheduler_method == SCH_MLFQ); }
@@ -238,7 +237,7 @@ void sched_init_PRIRR(uint8 numOfPriorities, uint8 quantum, uint32 starvThresh)
 		*quantums = quantum;
 		kclock_set_quantum(quantums[0]);
 		sched_set_starv_thresh(starvThresh);
-		for (uint8 i = 0; i < numOfPriorities; i++) 
+		for (uint8 i = 0; i < numOfPriorities; i++)
 		{
 			init_queue(&ProcessQueues.env_ready_queues[i]);
 		}
@@ -338,10 +337,10 @@ struct Env* fos_scheduler_PRIRR() {
 		for (int i = 0; i < num_of_ready_queues; i++)
 		{
 
-			
+
 			if(queue_size(&(ProcessQueues.env_ready_queues[i]))> 0)
 			{
-				
+
 				kclock_set_quantum(quantums[0]);
 				next_env = dequeue(&(ProcessQueues.env_ready_queues[i]));
 				return next_env;
@@ -350,7 +349,7 @@ struct Env* fos_scheduler_PRIRR() {
 		}
 
 	return NULL;
-	
+
 }
 
 
@@ -360,25 +359,18 @@ struct Env* fos_scheduler_PRIRR() {
 //========================================
 void clock_interrupt_handler(struct Trapframe* tf)
 {
-    if (isSchedMethodPRIRR() && prirr_starvation_threshold > 0)
+    if (isSchedMethodPRIRR() && st > 0)
     {
-        // Iterate from Lowest Priority up to Priority 1
         for (int i = num_of_ready_queues - 1; i > 0; i--)
         {
             struct Env *proc = LIST_FIRST(&(ProcessQueues.env_ready_queues[i]));
-            
+
             while (proc != NULL)
             {
                 struct Env *next_proc = LIST_NEXT(proc);
-
-                // Check starvation
-                if ((timer_ticks() - proc->starter) >= prirr_starvation_threshold)
+                if ((timer_ticks() - proc->starter) >= st)
                 {
-                    // Promote ONE process from this queue
                     env_set_priority(proc->env_id, proc->priority - 1);
-                    
-                    // Break the inner loop (process next queue)
-                    // Do NOT use return here.
                     break;
                 }
                 proc = next_proc;
