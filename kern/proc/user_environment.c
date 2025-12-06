@@ -495,57 +495,59 @@ void env_free(struct Env *e)
 	// [1] [NOT REQUIRED] [If BUFFERING is Enabled] Un-buffer any BUFFERED page belong to this environment from the free/modified lists
 	// [2] Free the pages in the PAGE working set from the main memory
 	// [3] Free the PAGE working set itself from the main memory
-	struct WorkingSetElement* ws_it;
-	LIST_FOREACH_SAFE(ws_it,&(e->page_WS_list), WorkingSetElement)
+	struct WorkingSetElement *ws_it;
+	LIST_FOREACH_SAFE(ws_it, &(e->page_WS_list), WorkingSetElement)
 	{
-	    unmap_frame(e->env_page_directory, ws_it->virtual_address);
-	    LIST_REMOVE(&(e->page_WS_list), ws_it);
-	    kfree(ws_it);
+		unmap_frame(e->env_page_directory, ws_it->virtual_address);
+		LIST_REMOVE(&(e->page_WS_list), ws_it);
+		kfree(ws_it);
 	}
 
 	// [4] Free the USER HEAP block allocator [if exists]
-    kfree((void*)e->kstack);
+	kfree((void *)e->kstack);
 
 	// [5] Free Shared variables [if any]
-    struct Share *itr = NULL;
-    acquire_kspinlock(&(AllShares.shareslock));
-    LIST_FOREACH(itr, &(AllShares.shares_list))
-    {
-    	 if (itr->ownerID == e->env_id)
-    	 {
-    	      delete_shared_object(itr->ownerID, (void *)itr->ID);
-    	 }
-    }
-    release_kspinlock(&(AllShares.shareslock));
+	struct Share *itr = NULL;
+	acquire_kspinlock(&(AllShares.shareslock));
+	LIST_FOREACH(itr, &(AllShares.shares_list))
+	{
+		if (itr->ownerID == e->env_id)
+		{
+			delete_shared_object(itr->ownerID, (void *)itr->ID);
+		}
+	}
+	release_kspinlock(&(AllShares.shareslock));
 
-    // [6] [NOT REQUIRED] Free Semaphores [if any]
+	// [6] [NOT REQUIRED] Free Semaphores [if any]
 	// [7] Free all TABLES from the main memory
-     for (int i = 0; i < PDX(USER_TOP); i++)
-    	 {
-    	 	uint32 va = i << 22;
-    	 	if (pd_is_table_used(e->env_page_directory, va))
-    	 	{
-    	 		uint32 *ptr_page_table = NULL;
-    	 		get_page_table(e->env_page_directory, va, &ptr_page_table);
-    	 		pd_set_table_unused(e->env_page_directory, va);
-    	 		pd_clear_page_dir_entry(e->env_page_directory, va);
+	for (int i = 0; i < PDX(USER_TOP); i++)
+	{
+		uint32 va = i << 22;
+		if (pd_is_table_used(e->env_page_directory, va))
+		{
+			uint32 *ptr_page_table = NULL;
+			get_page_table(e->env_page_directory, va, &ptr_page_table);
+			pd_set_table_unused(e->env_page_directory, va);
+			pd_clear_page_dir_entry(e->env_page_directory, va);
 
-    	 		if (ptr_page_table != NULL)
-    	 		{
-    	 			kfree((void*) ptr_page_table);
-    	 		}
-    	 	}
-    	 }
-     if (e->prepagedVAs) {
-         kfree(e->prepagedVAs);
-         e->prepagedVAs = NULL;
-     }
+			if (ptr_page_table != NULL)
+			{
+				kfree((void *)ptr_page_table);
+			}
+		}
+	}
+	if (e->prepagedVAs)
+	{
+		kfree(e->prepagedVAs);
+		e->prepagedVAs = NULL;
+	}
 
 	// [8] Free the page DIRECTORY from the main memory
-     if (e->env_page_directory) {
-         kfree((void*)e->env_page_directory);
-         e->env_page_directory = NULL;
-     }
+	if (e->env_page_directory)
+	{
+		kfree((void *)e->env_page_directory);
+		e->env_page_directory = NULL;
+	}
 #endif
 	// [9] remove this program from the page file
 	/*(ALREADY DONE for you)*/
@@ -556,9 +558,8 @@ void env_free(struct Env *e)
 	/*(ALREADY DONE for you)*/
 	free_environment(e); /*(ALREADY DONE for you)*/ // (frees the environment (returns it back to the free environment list))
 
-
 	/*========================*/
-	//panic("env_free() is not implemented yet...!!");
+	// panic("env_free() is not implemented yet...!!");
 }
 
 //============================
@@ -947,28 +948,28 @@ uint32 __cur_k_stk = KERNEL_HEAP_START;
 //===========================================================
 // 6) ALLOCATE SPACE FOR USER KERNEL STACK (One Per Process):
 //===========================================================
-void* create_user_kern_stack(uint32* ptr_user_page_directory) //youssef
+void *create_user_kern_stack(uint32 *ptr_user_page_directory) // youssef
 {
-	//TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #1 create_user_kern_stack
-	//Your code is here
-	//Comment the following line
-	//panic("create_user_kern_stack() is not implemented yet...!!");
-    // 1. Allocate space for the user kernel stack (KERNEL_STACK_SIZE)
-    void* stackbase = kmalloc(KERNEL_STACK_SIZE);
-    if (stackbase == NULL)
-        panic("Kernel heap out of memory while creating user kernel stack");
+	// TODO: [PROJECT'25.GM#3] FAULT HANDLER I - #1 create_user_kern_stack
+	// Your code is here
+	// Comment the following line
+	// panic("create_user_kern_stack() is not implemented yet...!!");
+	//  1. Allocate space for the user kernel stack (KERNEL_STACK_SIZE)
+	void *stackbase = kmalloc(KERNEL_STACK_SIZE);
+	if (stackbase == NULL)
+		panic("Kernel heap out of memory while creating user kernel stack");
 
-    uint32 base_va = (uint32)stackbase;
+	uint32 base_va = (uint32)stackbase;
 
-    // 2. Set the bottom page (guard page) as not present (unmapped)
-    pt_set_page_permissions(ptr_user_page_directory, base_va, 0, PERM_PRESENT);
+	// 2. Set the bottom page (guard page) as not present (unmapped)
+	pt_set_page_permissions(ptr_user_page_directory, base_va, 0, PERM_PRESENT);
 
-    // 3. Return a pointer to the start of the allocated space
-    return (void*)base_va;
+	// 3. Return a pointer to the start of the allocated space
+	return (void *)base_va;
 
-	//allocate space for the user kernel stack.
-	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
-	//return a pointer to the start of the allocated space (including the GUARD PAGE)
+	// allocate space for the user kernel stack.
+	// remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
+	// return a pointer to the start of the allocated space (including the GUARD PAGE)
 }
 
 /*2024*/
