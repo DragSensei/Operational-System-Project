@@ -732,5 +732,5 @@ void sched_set_starv_thresh(uint32 starvThresh) // youssef
 	// Your code is here
 	// Comment the following line
 	// panic("sched_set_starv_thresh() is not implemented yet...!!");
-	prirr_starvation_threshold = starvThresh;
+	st = starvThresh;
 }

@@ -138,7 +138,7 @@ struct Share *alloc_share(int32 ownerID, char *shareName, uint32 size, uint8 isW
 	return new_share;
 #endif
 	// Comment the following line
-	// panic("alloc_share() is not implemented yet...!!");
+	panic("alloc_share() is not implemented yet...!!");
 }
 
 //=========================
@@ -185,7 +185,7 @@ int create_shared_object(int32 ownerID, char *shareName, uint32 size, uint8 isWr
 	return call_alloc->ID;
 #endif
 	// Comment the following line
-	// panic("create_shared_object() is not implemented yet...!!");
+	panic("create_shared_object() is not implemented yet...!!");
 
 	// This function should create the shared object at the given virtual address with the given size
 	// and return the ShareObjectID
@@ -235,7 +235,7 @@ int get_shared_object(int32 ownerID, char *shareName, void *virtual_address)
 	return get_obj->ID;
 #endif
 	// Comment the following line
-	// panic("get_shared_object() is not implemented yet...!!");
+	panic("get_shared_object() is not implemented yet...!!");
 	//  	This function should share the required object in the heap of the current environment
 	//	starting from the given virtual_address with the specified permissions of the object: read_only/writable
 	//  	and return the ShareObjectID
@@ -261,9 +261,20 @@ void free_share(struct Share *ptrShare)
 	release_kspinlock(&(AllShares.shareslock));
 	if (ptrShare->framesStorage != NULL)
 	{
+		int num_pages = ROUNDUP(ptrShare->size, PAGE_SIZE) / PAGE_SIZE;
+		for (int i = 0; i < num_pages; i++)
+		{
+		    struct FrameInfo *frame = ptrShare->framesStorage[i];
+		    if (frame != NULL)
+		    {
+		        // Decrease reference / Free the frame
+		        free_frame(frame);
+		    }
+		}
 		kfree(ptrShare->framesStorage);
 	}
 	kfree(ptrShare);
+	tlbflush();
 #endif
 	// Comment the following line
 	// panic("free_share() is not implemented yet...!!");
@@ -274,12 +285,68 @@ void free_share(struct Share *ptrShare)
 //=========================
 int delete_shared_object(int32 sharedObjectID, void *startVA)
 {
-	// TODO: [PROJECT'25.BONUS#5] EXIT #2 - delete_shared_object
-	// Your code is here
-	// Comment the following line
-	panic("delete_shared_object() is not implemented yet...!!");
+	//TODO: [PROJECT'25.BONUS#5] EXIT #2 - delete_shared_object
+	//Your code is here
+	#if USE_KHEAP
+	struct Env* myenv = get_cpu_proc(); //The calling environment
+	acquire_kspinlock(&(AllShares.shareslock));
+	struct Share* ptr = NULL;
+	struct Share* t = NULL;
+	LIST_FOREACH(ptr, &(AllShares.shares_list)){
+		if(t->ID == sharedObjectID){
+			ptr = t;
+			break;
+		}
 
-	struct Env *myenv = get_cpu_proc(); // The calling environment
+	}
+
+	release_kspinlock(&(AllShares.shareslock));
+
+	if(ptr == NULL){
+		return E_SHARED_MEM_NOT_EXISTS;
+	}
+
+	uint32 num_PagesNeeded = (ROUNDUP(ptr->size, PAGE_SIZE) / PAGE_SIZE);
+	for(int i = 0; i < num_PagesNeeded; i++){
+		uint32 *ptr_table = NULL;
+		uint32 va = (uint32) startVA + (i * PAGE_SIZE);
+
+		unmap_frame(myenv->env_page_directory, va);
+		get_page_table(myenv->env_page_directory, va, &ptr_table);
+		if(ptr_table != NULL){
+			uint32 is_empty = 1;
+            pt_clear_page_table_entry(myenv->env_page_directory, va);
+
+			for(int l = 0; l < 1024; l++){
+				uint32 *pt = NULL;
+				uint32 perm = ptr_table[l] & 0x00000FFF;
+				if(perm & PERM_PRESENT){
+					is_empty = 0;
+					break;
+				}
+			}
+
+			if(is_empty){
+				pd_clear_page_dir_entry(myenv->env_page_directory, va);
+				kfree(ptr_table);
+			}
+		}
+	}
+
+	acquire_kspinlock(&(AllShares.shareslock));
+	ptr->references--;
+	release_kspinlock(&(AllShares.shareslock));
+
+	if(ptr->references == 0){
+		free_share(ptr);
+		return 0;
+	}
+
+	tlbflush();
+	return 0;
+	#endif
+	//Comment the following line
+	panic("delete_shared_object() is not implemented yet...!!");
 
 	// This function should free (delete) the shared object from the User Heapof the current environment
 	// If this is the last shared env, then the "frames_store" should be cleared and the shared object should be deleted
@@ -294,4 +361,5 @@ int delete_shared_object(int32 sharedObjectID, void *startVA)
 	//	4) Update references
 	//	5) If this is the last share, delete the share object (use free_share())
 	//	6) Flush the cache "tlbflush()"
+
 }

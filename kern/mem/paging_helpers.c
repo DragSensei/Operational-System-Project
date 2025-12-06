@@ -50,24 +50,24 @@ inline void pt_set_page_permissions(uint32 *directory, uint32 virtual_address, u
 // If the page table not exist, return -1
 inline int pt_get_page_permissions(uint32 *page_directory, uint32 virtual_address)
 {
-	uint32 pd_index = PDX(virtual_address); // Page directory index
-	uint32 pt_index = PTX(virtual_address); // Page table index
+	uint32 pdx = PDX(virtual_address);
+	uint32 ptx = PTX(virtual_address);
 
-	uint32 pde = page_directory[pd_index];
-	if (!(pde & PERM_PRESENT))
+	uint32 pd = page_directory[pdx];
+	if (!(pd & PERM_PRESENT))
 	{
-		// Page table not present
+
 		return -1;
 	}
 
 	// Get the page table pointer (convert PDE to kernel virtual address)
 #if USE_KHEAP
-	uint32 *page_table = (uint32 *)kheap_virtual_address(EXTRACT_ADDRESS(pde));
+	uint32 *page_table = (uint32 *)kheap_virtual_address(EXTRACT_ADDRESS(pd));
 #else
-	uint32 *page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(pde));
+	uint32 *page_table = STATIC_KERNEL_VIRTUAL_ADDRESS(EXTRACT_ADDRESS(pd));
 #endif
 
-	uint32 pte = page_table[pt_index];
+	uint32 pte = page_table[ptx];
 
 	// If page not present or invalid, return 0
 	if (!(pte & PERM_PRESENT) && !(pte & PERM_BUFFERED))

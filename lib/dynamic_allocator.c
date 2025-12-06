@@ -46,7 +46,7 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 daEnd)
 	//Your code is here
 	dynAllocStart = daStart; dynAllocEnd = daEnd;
 	uint32 TotalPages = (daEnd - daStart) / PAGE_SIZE;
-	
+
 	for (int i = 0; i <= LOG2_MAX_SIZE - LOG2_MIN_SIZE; i++) {
 		LIST_INIT(&freeBlockLists[i]);
 	}
@@ -92,7 +92,7 @@ int log2(int number) {
     if (number <= 1) return 0;
     uint32 a = 0;
     number--;
-    while (number > 0) 
+    while (number > 0)
 	{
         number >>= 1;
         a++;
@@ -107,11 +107,11 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 	}
 
 	if (!size) return NULL;
-	
+
 	int index = log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE)) - LOG2_MIN_SIZE;
 	int blockSize = 1 << log2(MAX(size, DYN_ALLOC_MIN_BLOCK_SIZE));
-	
-	if (!LIST_EMPTY(&freeBlockLists[index])) 
+
+	if (!LIST_EMPTY(&freeBlockLists[index]))
 	{
 		struct BlockElement* ptrBlock = LIST_FIRST(&freeBlockLists[index]);
 		LIST_REMOVE(&freeBlockLists[index], ptrBlock);
@@ -120,7 +120,7 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 		pageBlockInfoArr[tmp].num_of_free_blocks--;
 		return ptrBlock;
 	}
-	else if (!LIST_EMPTY(&freePagesList)) 
+	else if (!LIST_EMPTY(&freePagesList))
 	{
 		struct PageInfoElement* ptrPage = LIST_FIRST(&freePagesList);
 		LIST_REMOVE(&freePagesList, ptrPage);
@@ -129,11 +129,11 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 
 		ptrPage->block_size = blockSize;
 		ptrPage->num_of_free_blocks =(PAGE_SIZE / blockSize) - 1;
-		
+
 		uint32 pageAddress = to_page_va(ptrPage);
-		for (int i = 1; i < (PAGE_SIZE / blockSize); i++) 
+		for (int i = 1; i < (PAGE_SIZE / blockSize); i++)
 		{
-			struct BlockElement* ptrBlock =  
+			struct BlockElement* ptrBlock =
 				(struct BlockElement*)(pageAddress + (i* blockSize));
 			LIST_INSERT_TAIL(&freeBlockLists[index], ptrBlock);
 		}
@@ -142,7 +142,7 @@ void *alloc_block(uint32 size) // 9.5 --> 16 2^4
 	}
 
 
-	while (index <= (LOG2_MAX_SIZE - LOG2_MIN_SIZE)) 
+	while (index <= (LOG2_MAX_SIZE - LOG2_MIN_SIZE))
 	{
 		if (!LIST_EMPTY(&freeBlockLists[index])) break;
 		index++;
@@ -179,7 +179,7 @@ void free_block(void *va)
 	uint32 block_size = page_info->block_size;
 
 	int list_index = log2(block_size) - LOG2_MIN_SIZE;
-    
+
 	struct BlockElement* block_to_free = (struct BlockElement*)va;
 	LIST_INSERT_TAIL(&freeBlockLists[list_index], block_to_free);
 	page_info->num_of_free_blocks++;
@@ -189,7 +189,7 @@ void free_block(void *va)
 		uint32 page_va = to_page_va(page_info);
         for (int i = 0; i < total_blocks_on_page; i++){
 			struct BlockElement* block_to_remove = (struct BlockElement*)(page_va + (i*block_size));
-			LIST_REMOVE(&freeBlockLists[list_index], block_to_remove);	
+			LIST_REMOVE(&freeBlockLists[list_index], block_to_remove);
 		}
 		return_page((void*)page_va);
 		LIST_INSERT_TAIL(&freePagesList, page_info);
@@ -213,11 +213,47 @@ void *realloc_block(void* va, uint32 new_size)
 	{
 	//TODO: [PROJECT'25.BONUS#2] KERNEL REALLOC - realloc_block
 	//Your code is here
+
+		  if (va == NULL)
+		        return alloc_block(new_size);
+
+		    if (new_size == 0)
+		    {
+		        free_block(va);
+		        return NULL;
+		    }
+
+		    if (new_size > DYN_ALLOC_MAX_BLOCK_SIZE)
+		        panic("Too big for DYNAMIC ALLOCATOR");
+
+		    uint32 old_block_size = get_block_size(va);
+
+		    uint32 required_new_block_size = 1 << log2(MAX(new_size, DYN_ALLOC_MIN_BLOCK_SIZE));
+
+		    if (old_block_size == required_new_block_size)
+		    {
+		        return va;
+		    }
+
+		    void *new_va = alloc_block(new_size);
+
+		    if (new_va == NULL)
+		    {
+		        return NULL;
+		    }
+		    uint32 bytes_to_copy = MIN(old_block_size, required_new_block_size);
+
+		    memcpy(new_va, va, bytes_to_copy);
+
+		    free_block(va);
+
+		    return new_va;
+
 	//Condition if the size we can allocate, we allocate and free the old address
 	//and the old data in the old block, we transfer to the new block.
 	// if we cant allocate, we dont free.
 
 	//Comment the following line
-	panic("realloc_block() Not implemented yet");
+	//panic("realloc_block() Not implemented yet");
 }
 }
